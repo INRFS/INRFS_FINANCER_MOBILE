@@ -1,0 +1,15 @@
+node_modules/
+.expo/
+.expo-temp/
+dist/
+web-build/
+*.log
+.DS_Store
+Thumbs.db
+.secrets/
+.env
+.codex-temp/
+.verification/
+INRFS_FINANCER_FE/
+inrfs_financer_api/
+INRFS Financer Loan Management.zip
