@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Ionicons } from "../../components/AppIcon";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Logo } from "../../components/Logo";
@@ -154,8 +154,140 @@ function InterestSchedule({ setSheet }: { setSheet: (sheet: Sheet) => void }) { 
 
 function DueOverdue({ setSheet }: { setSheet: (sheet: Sheet) => void }) { const [tab, setTab] = useState("All"); const allRows = [...overdueAccounts, ...duePayments]; const rows = tab === "All" ? allRows : allRows.filter((item) => item.status === tab); return <Screen><Header title="Due & Overdue" subtitle="Prioritise collections and follow up without losing context." /><Grid><KpiCard label="Due Today" value={formatCurrency(dashboardStats.interestDueToday)} accent="orange" icon="calendar-outline" /><KpiCard label="Overdue" value={formatCurrency(dashboardStats.overdueAmount)} accent="error" icon="alert-circle-outline" /></Grid><Segmented options={["All", "Due", "Overdue", "Upcoming"]} value={tab} onChange={setTab} />{rows.map((item) => <Card key={item.id}><View style={styles.dueTop}><View style={styles.flex}><Text style={styles.rowTitle}>{item.customer}</Text><Text style={styles.meta}>{item.loan} · {item.due} · {item.days}</Text></View><Badge status={item.status} /></View><Text style={styles.dueAmount}>{formatCurrency(item.amount)}</Text><View style={styles.twoButtons}><Button label="Record Payment" style={styles.flex} onPress={() => setSheet("payment")} /><Button label="Reschedule" variant="secondary" style={styles.flex} onPress={() => setSheet("reschedule")} /></View><Button label="Send Reminder" icon="chatbubble-outline" variant="ghost" onPress={() => setSheet("sms")} /></Card>)}{rows.length === 0 ? <Empty label="No collection items in this category." /> : null}</Screen>; }
 
-function Ledger() { const [selectedId, setSelectedId] = useState("CUS001"); const selected = customerLedgers.find((item) => item.id === selectedId) ?? customerLedgers[0]!; return <Screen><Header title="Customer Ledger" subtitle="View complete transaction history and balances." /><Segmented options={customerLedgers.map((item) => item.id)} value={selectedId} onChange={setSelectedId} /><Card><View style={styles.profileHero}><View style={styles.largeAvatar}><Text style={styles.largeAvatarText}>{selected.name[0]}</Text></View><View style={styles.flex}><Text style={styles.formTitle}>{selected.name}</Text><Text style={styles.meta}>{selected.id} · {selected.phone} · {selected.loanCount} loans</Text></View></View></Card><Grid><KpiCard label="Total Disbursed" value={formatCurrency(selected.totalDisbursed)} accent="cyan" /><KpiCard label="Total Received" value={formatCurrency(selected.totalReceived)} accent="green" /><KpiCard label="Outstanding" value={formatCurrency(selected.outstanding)} accent="orange" /></Grid><Card><SectionTitle>Ledger Entries</SectionTitle>{selected.entries.map((entry, index) => <DataRow key={`${entry.date}-${index}`} title={entry.description} subtitle={`${entry.date} · Debit ${formatCurrency(entry.debit)} · Credit ${formatCurrency(entry.credit)}`} amount={formatCurrency(entry.balance)} />)}{selected.entries.length === 0 ? <Empty label="No ledger entries for this customer." /> : null}</Card><Button label="Export Ledger" icon="download-outline" variant="secondary" onPress={() => Alert.alert("Ledger exported", `${selected.name}'s ledger statement is ready.`)} /></Screen>; }
+function normalizeLedgerPayload(payload: any, fallbackCustomer: any, fallbackEntries: any[] = []) {
+  const entries = Array.isArray(payload?.entries) ? payload.entries : pageItems(payload);
+  const customer = payload?.customer ?? fallbackCustomer ?? null;
+  return {
+    customer,
+    entries: (entries.length ? entries : fallbackEntries).map((item: any, index: number) => ({
+      id: item.id ?? `ledger-${index}`,
+      transactionAt: item.transactionAt ?? item.occurredAt ?? item.date ?? item.transactionDate,
+      transactionNumber: item.transactionNumber ?? item.transactionId ?? item.reference ?? item.id ?? `TXN-${index + 1}`,
+      type: item.type ?? item.description ?? item.transactionType ?? "Ledger entry",
+      debit: Number(item.debit ?? item.debitAmount ?? 0),
+      credit: Number(item.credit ?? item.creditAmount ?? 0),
+      balance: Number(item.balance ?? item.closingBalance ?? item.runningBalance ?? 0),
+      status: item.status,
+    })),
+  };
+}
 
+function formatLedgerDate(value: any) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
+  return date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function buildCsv(rows: any[]) {
+  const data = [
+    ["Date", "Transaction", "Description", "Debit", "Credit", "Balance"],
+    ...rows.map((item) => [item.transactionAt, item.transactionNumber, item.type, item.debit, item.credit, item.balance]),
+  ];
+  return data.map((row) => row.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`).join(",")).join("\r\n");
+}
+
+function Ledger() {
+  const [customersList, setCustomersList] = useState<any[]>([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [ledgerData, setLedgerData] = useState<{ customer: any; entries: any[] }>({ customer: null, entries: [] });
+  const [search, setSearch] = useState("");
+  const [loadingCustomers, setLoadingCustomers] = useState(true);
+  const [loadingLedger, setLoadingLedger] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+    setLoadingCustomers(true);
+    platformApi.customers.all()
+      .then((payload) => {
+        if (!mounted) return;
+        const items = pageItems(payload);
+        setCustomersList(items);
+        setSelectedId((current) => current || items[0]?.id || "");
+      })
+      .catch((reason) => mounted && setError(reason instanceof Error ? reason.message : "Unable to load customers."))
+      .finally(() => mounted && setLoadingCustomers(false));
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    let mounted = true;
+    setLoadingLedger(true);
+    setError("");
+    platformApi.customers.ledger(selectedId, { pageSize: 500 })
+      .then((payload) => {
+        if (!mounted) return;
+        const selected = customersList.find((item) => item.id === selectedId);
+        setLedgerData(normalizeLedgerPayload(payload, selected));
+      })
+      .catch((reason) => mounted && setError(reason instanceof Error ? reason.message : "Unable to load ledger."))
+      .finally(() => mounted && setLoadingLedger(false));
+    return () => { mounted = false; };
+  }, [selectedId, customersList]);
+
+  const filteredCustomers = useMemo(() => {
+    const value = search.trim().toLowerCase();
+    return customersList.filter((item) => !value || [item.fullName, item.customerNumber, item.phone].some((field) => String(field || "").toLowerCase().includes(value)));
+  }, [customersList, search]);
+
+  const totals = useMemo(() => ledgerData.entries.reduce((sum, item) => ({
+    debit: sum.debit + Number(item.debit || 0),
+    credit: sum.credit + Number(item.credit || 0),
+  }), { debit: 0, credit: 0 }), [ledgerData.entries]);
+
+  const selectedCustomer = ledgerData.customer ?? customersList.find((item) => item.id === selectedId);
+  const currentBalance = ledgerData.entries.length
+    ? Number(ledgerData.entries[ledgerData.entries.length - 1].balance || totals.debit - totals.credit)
+    : totals.debit - totals.credit;
+
+  const exportCsv = async () => {
+    if (!ledgerData.entries.length) return;
+    try {
+      await Share.share({
+        title: `${selectedCustomer?.customerNumber || "customer"}-ledger.csv`,
+        message: buildCsv(ledgerData.entries),
+      });
+    } catch (reason) {
+      Alert.alert("Export failed", reason instanceof Error ? reason.message : "Unable to share the ledger CSV.");
+    }
+  };
+
+  return <Screen>
+    <Header title="Customer Ledger" subtitle="Review the authoritative transaction history for each customer." />
+    {error ? <Card><Text style={styles.error}>{error}</Text></Card> : null}
+    <Field label="Search customers" value={search} onChangeText={setSearch} placeholder="Name, customer number or phone" />
+    <Card>
+      <SectionTitle>Customers</SectionTitle>
+      {loadingCustomers ? <Text style={styles.meta}>Loading customers…</Text> : filteredCustomers.length ? filteredCustomers.map((item) => {
+        const active = selectedId === item.id;
+        return <Pressable key={item.id} onPress={() => setSelectedId(item.id)} style={[styles.customerLedgerItem, active && styles.customerLedgerItemActive]}>
+          <View style={styles.largeAvatar}><Text style={styles.largeAvatarText}>{String(item.fullName || "C").charAt(0).toUpperCase()}</Text></View>
+          <View style={styles.flex}><Text style={styles.rowTitle}>{item.fullName || "Unnamed customer"}</Text><Text style={styles.meta}>{item.customerNumber || item.id} · {item.phone || "—"}</Text></View>
+          {active ? <Ionicons name="checkmark-circle" size={21} color={colors.cyan} /> : null}
+        </Pressable>;
+      }) : <Text style={styles.meta}>No customers found.</Text>}
+    </Card>
+
+    {selectedCustomer ? <>
+      <Card><View style={styles.profileHero}><View style={styles.largeAvatar}><Text style={styles.largeAvatarText}>{String(selectedCustomer.fullName || "C").charAt(0).toUpperCase()}</Text></View><View style={styles.flex}><Text style={styles.formTitle}>{selectedCustomer.fullName || "Select a customer"}</Text><Text style={styles.meta}>{selectedCustomer.customerNumber || selectedCustomer.id} · {selectedCustomer.phone || "—"}</Text></View></View></Card>
+      <Grid>
+        <KpiCard label="Total Disbursed" value={formatCurrency(totals.debit)} accent="cyan" />
+        <KpiCard label="Total Received" value={formatCurrency(totals.credit)} accent="green" />
+        <KpiCard label="Current Balance" value={formatCurrency(currentBalance)} accent="orange" />
+      </Grid>
+      <Card>
+        <SectionTitle action={<Button label="Export CSV" icon="download-outline" variant="secondary" onPress={() => void exportCsv()} disabled={!ledgerData.entries.length} />}>Ledger Entries</SectionTitle>
+        {loadingLedger ? <Text style={styles.meta}>Loading ledger…</Text> : ledgerData.entries.length ? ledgerData.entries.map((item, index) => <Card key={item.id ?? index} style={styles.ledgerEntryCard}>
+          <View style={styles.dueTop}><View style={styles.flex}><Text style={styles.rowTitle}>{formatLedgerDate(item.transactionAt)}</Text><Text style={styles.meta}>{item.transactionNumber}</Text></View><Text style={styles.summaryValue}>{formatCurrency(item.balance)}</Text></View>
+          <Text style={styles.meta}>{item.type}</Text>
+          <View style={styles.ledgerAmounts}><Text style={styles.ledgerDebit}>Debit {item.debit ? formatCurrency(item.debit) : "—"}</Text><Text style={styles.ledgerCredit}>Credit {item.credit ? formatCurrency(item.credit) : "—"}</Text></View>
+        </Card>) : <Empty label="No ledger transactions found." />}
+      </Card>
+    </> : null}
+  </Screen>;
+}
 function Notifications() { const [read, setRead] = useState<number[]>(notifications.filter((item) => !item.unread).map((item) => item.id)); const [category, setCategory] = useState("All"); const items = category === "All" ? notifications : notifications.filter((item) => item.category === category); return <Screen><Header title="Notifications" subtitle="Updates across loans, payments and billing." action={<Button label="Mark all read" variant="ghost" onPress={() => setRead(notifications.map((item) => item.id))} />} /><Segmented options={["All", "Overdue", "Payments", "Loans", "System"]} value={category} onChange={setCategory} />{items.map((item) => { const isRead = read.includes(item.id); const accent: Accent = item.category === "Overdue" ? "error" : item.category === "Payments" ? "green" : item.category === "Loans" ? "purple" : "cyan"; return <Pressable key={item.id} onPress={() => setRead((old) => old.includes(item.id) ? old.filter((id) => id !== item.id) : [...old, item.id])}><Card style={[styles.notification, isRead && styles.readNotification]}><IconBubble icon={accent === "error" ? "alert-circle-outline" : accent === "green" ? "checkmark-circle-outline" : accent === "purple" ? "wallet-outline" : "information-circle-outline"} accent={accent} /><View style={styles.flex}><View style={styles.notificationTitle}><Text style={styles.rowTitle}>{item.title}</Text><Badge status={item.category === "Overdue" ? "Overdue" : item.category === "Payments" ? "Paid" : "Active"} /></View><Text style={styles.meta}>{item.body}</Text><Text style={styles.time}>{item.time}</Text></View>{!isRead ? <View style={styles.unread} /> : null}</Card></Pressable>; })}</Screen>; }
 
 type ReportTab = "Customers" | "Loans" | "Payments" | "Interest" | "Overdue" | "Customer Statement";
@@ -208,6 +340,7 @@ function Sms({ onDone }: { onDone: () => void }) { return <View style={styles.fo
 function Empty({ label }: { label: string }) { return <View style={styles.empty}><Ionicons name="folder-open-outline" size={33} color={colors.subtle} /><Text style={styles.meta}>{label}</Text></View>; }
 
 const styles = StyleSheet.create({
+  customerLedgerItem: { minHeight: 64, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, padding: 10, flexDirection: "row", alignItems: "center", gap: 10, marginTop: 8 }, customerLedgerItemActive: { borderColor: colors.cyan, backgroundColor: colors.cyanSoft }, ledgerEntryCard: { padding: 12, marginTop: 8 }, ledgerAmounts: { flexDirection: "row", justifyContent: "space-between", marginTop: 10 }, ledgerDebit: { color: colors.error, fontFamily: fonts.semibold, fontSize: 11 }, ledgerCredit: { color: colors.green ?? "#16A34A", fontFamily: fonts.semibold, fontSize: 11 }, error: { color: colors.error, fontFamily: fonts.medium, fontSize: 12, lineHeight: 18 },
   app: { flex: 1, backgroundColor: colors.background }, topbar: { minHeight: 62, paddingVertical: 8, backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.border, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, gap: 10 }, menuButton: { width: 38, height: 38, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: colors.background }, topActions: { marginLeft: "auto", flexDirection: "row", alignItems: "center", gap: 14 }, notificationDot: { position: "absolute", right: 0, top: 0, width: 7, height: 7, borderRadius: 4, backgroundColor: colors.error }, avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.cyanSoft, alignItems: "center", justifyContent: "center" }, avatarText: { color: colors.cyan, fontFamily: fonts.bold, fontSize: 11 }, body: { flex: 1 }, bottomNav: { position: "absolute", left: 0, right: 0, bottom: 0, minHeight: 70, paddingBottom: 8, backgroundColor: colors.white, borderTopWidth: 1, borderTopColor: colors.border, flexDirection: "row", ...shadows.card }, navItem: { flex: 1, alignItems: "center", justifyContent: "center", gap: 3 }, navText: { color: colors.subtle, fontFamily: fonts.medium, fontSize: 9 }, navTextActive: { color: colors.cyan, fontFamily: fonts.semibold },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 10 }, action: { width: "47.8%", backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: radii.lg, padding: 15, flexDirection: "row", alignItems: "center", gap: 10 }, actionText: { color: colors.dark, fontFamily: fonts.semibold, fontSize: 12, flex: 1 }, overdueBanner: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.errorSoft, borderColor: "#FECACA" }, overdueLabel: { color: colors.error, fontFamily: fonts.bold, fontSize: 9, letterSpacing: 0.8 }, overdueValue: { color: colors.error, fontFamily: fonts.extrabold, fontSize: 22, marginVertical: 2 }, chart: { height: 145, flexDirection: "row", justifyContent: "space-around", alignItems: "flex-end", paddingTop: 18 }, barWrap: { alignItems: "center", justifyContent: "flex-end", gap: 6 }, barPair: { flexDirection: "row", alignItems: "flex-end", gap: 3 }, bar: { width: 13, borderRadius: 4 }, barLabel: { color: colors.subtle, fontFamily: fonts.regular, fontSize: 10 }, legend: { flexDirection: "row", justifyContent: "center", gap: 14, marginTop: 10 }, meta: { color: colors.muted, fontFamily: fonts.regular, fontSize: 11, lineHeight: 17 }, rowTitle: { color: colors.dark, fontFamily: fonts.semibold, fontSize: 13 }, dueTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }, dueAmount: { color: colors.dark, fontFamily: fonts.extrabold, fontSize: 24, marginVertical: 14 }, twoButtons: { flexDirection: "row", gap: 9 }, paymentRecord: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border, gap: 8 }, flex: { flex: 1 }, ledgerSummary: { flexDirection: "row", justifyContent: "space-between", paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: colors.border }, summaryValue: { color: colors.dark, fontFamily: fonts.extrabold, fontSize: 18, marginTop: 4 }, notification: { flexDirection: "row", alignItems: "center", gap: 12 }, readNotification: { opacity: 0.58 }, notificationTitle: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }, time: { color: colors.subtle, fontFamily: fonts.regular, fontSize: 9, marginTop: 5 }, unread: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.cyan }, contactCard: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.cyanSoft, borderColor: "#BAE6FD" }, reportCard: { flexDirection: "row", alignItems: "flex-start", gap: 13 }, reportActions: { flexDirection: "row", gap: 8, marginTop: 12 }, chargeCard: { gap: 15 }, chargeMonth: { color: colors.dark, fontFamily: fonts.extrabold, fontSize: 20, marginTop: 3 }, formula: { paddingVertical: 18, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", justifyContent: "space-around" }, formulaValue: { color: colors.dark, fontFamily: fonts.extrabold, fontSize: 18 }, formulaOperator: { color: colors.muted, fontFamily: fonts.medium, fontSize: 13 }, warning: { backgroundColor: "#FFF7ED", borderColor: "#FED7AA", flexDirection: "row", alignItems: "center", gap: 11 }, formCard: { gap: 16 }, center: { flexGrow: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 28 }, authTitle: { color: colors.dark, fontFamily: fonts.bold, fontSize: 21, textAlign: "center" }, authSub: { color: colors.muted, fontFamily: fonts.regular, fontSize: 13, lineHeight: 19, textAlign: "center" }, label: { color: "#374151", fontFamily: fonts.medium, fontSize: 13 },
   overlay: { flex: 1, backgroundColor: "rgba(23,32,51,0.45)", justifyContent: "flex-end" }, menuSheet: { maxHeight: "92%", backgroundColor: colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 18 }, sheetHandle: { width: 42, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: "center", marginBottom: 14 }, menuList: { paddingVertical: 16, gap: 4 }, menuRow: { minHeight: 45, borderRadius: radii.md, flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 13 }, menuRowActive: { backgroundColor: colors.cyanSoft }, menuLabel: { flex: 1, color: colors.muted, fontFamily: fonts.medium, fontSize: 13 }, menuBadge: { minWidth: 21, height: 21, borderRadius: 11, backgroundColor: colors.error, alignItems: "center", justifyContent: "center" }, menuBadgeText: { color: colors.white, fontFamily: fonts.bold, fontSize: 10 }, profileRow: { flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 15 },

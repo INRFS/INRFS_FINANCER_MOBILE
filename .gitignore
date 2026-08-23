@@ -13,3 +13,7 @@ Thumbs.db
 INRFS_FINANCER_FE/
 inrfs_financer_api/
 INRFS Financer Loan Management.zip
+
+# Local APK files
+*.apk
+*.aab
