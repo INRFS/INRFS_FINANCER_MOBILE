@@ -11,7 +11,7 @@ import {
   ResetPasswordScreen,
 } from "../screens/auth/AuthScreens";
 import { LiveAdminAppScreen } from "../screens/admin/LiveAdminAppScreen";
-import { LiveFinancerAppScreen } from "../screens/financer/LiveFinancerAppScreen";
+import { FinancerDrawerNavigator } from "./FinancerDrawerNavigator";
 import type { RootStackParamList } from "../types/navigation";
 import { useAuth } from "../auth/AuthContext";
 import { ActivityIndicator, View } from "react-native";
@@ -27,7 +27,7 @@ export function RootNavigator() {
     if (showWelcome) return <FinancerWelcomeScreen navigation={{ replace: dismissWelcome } as never} route={{} as never}/>;
     return admin
       ? <Stack.Navigator screenOptions={{ headerShown: false }}><Stack.Screen name="AdminApp" component={LiveAdminAppScreen} /></Stack.Navigator>
-      : <Stack.Navigator screenOptions={{ headerShown: false }}><Stack.Screen name="FinancerApp" component={LiveFinancerAppScreen} /></Stack.Navigator>;
+      : <Stack.Navigator screenOptions={{ headerShown: false }}><Stack.Screen name="FinancerApp" component={FinancerDrawerNavigator} /></Stack.Navigator>;
   }
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>

@@ -92,6 +92,8 @@ function ActionWizard({ item, kind, onCancel, onSaved }: { item: any, kind: "pay
   // Payment fields
   const [amount, setAmount] = useState(String(item.amountDue ?? item.outstandingAmount ?? ""));
   const [method, setMethod] = useState("Cash");
+  const [type, setType] = useState("Interest");
+  const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
   
   // Reschedule fields
@@ -106,9 +108,10 @@ function ActionWizard({ item, kind, onCancel, onSaved }: { item: any, kind: "pay
           loanId: item.loanId, 
           paymentScheduleId: item.id, 
           amount: Number(amount), 
+          type,
           receivedAt: new Date().toISOString(), 
           mode: method, 
-          externalReference: null, 
+          externalReference: reference.trim() || null, 
           notes: notes.trim() 
         });
       } else {
@@ -138,9 +141,12 @@ function ActionWizard({ item, kind, onCancel, onSaved }: { item: any, kind: "pay
         <Card>
           {kind === "payment" ? (
             <View style={s.gap}>
+              <Text style={s.meta}>Payment Type</Text>
+              <Segmented options={["Interest", "Principal", "Penalty"]} value={type} onChange={setType}/>
               <Field label="Amount Received (₹)" value={amount} onChangeText={setAmount} keyboardType="decimal-pad"/>
               <Text style={s.meta}>Payment Method</Text>
               <Segmented options={["Cash", "Bank Transfer", "UPI"]} value={method} onChange={setMethod}/>
+              <Field label="Reference ID (Optional)" value={reference} onChangeText={setReference} />
               <Field label="Notes (Optional)" value={notes} onChangeText={setNotes} multiline/>
             </View>
           ) : (

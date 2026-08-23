@@ -38,6 +38,8 @@ export const accentSoft: Record<Accent, string> = {
   error: colors.errorSoft,
 };
 
+import { KeyboardAvoidingView, Platform } from "react-native";
+
 export function Screen({ children, contentStyle }: { children: ReactNode; contentStyle?: StyleProp<ViewStyle> }) {
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
@@ -45,9 +47,11 @@ export function Screen({ children, contentStyle }: { children: ReactNode; conten
         <View style={styles.ambientCyan} />
         <View style={styles.ambientPurple} />
       </View>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.screen, contentStyle]} showsVerticalScrollIndicator={false}>
-        {children}
-      </ScrollView>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.screen, contentStyle]} showsVerticalScrollIndicator={false}>
+          {children}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
