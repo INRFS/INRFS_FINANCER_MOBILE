@@ -7,6 +7,8 @@ export type RootStackParamList = {
   FinancerApp: undefined;
   AdminLogin: undefined;
   AdminApp: undefined;
+  ResetPassword: { token?: string } | undefined;
+  LegalNotice: { type: "privacy" | "terms" };
 };
 
 export type Accent = "cyan" | "green" | "yellow" | "orange" | "pink" | "purple" | "error";

@@ -41,6 +41,10 @@ export const accentSoft: Record<Accent, string> = {
 export function Screen({ children, contentStyle }: { children: ReactNode; contentStyle?: StyleProp<ViewStyle> }) {
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
+      <View pointerEvents="none" style={styles.ambient}>
+        <View style={styles.ambientCyan} />
+        <View style={styles.ambientPurple} />
+      </View>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.screen, contentStyle]} showsVerticalScrollIndicator={false}>
         {children}
       </ScrollView>
@@ -51,6 +55,7 @@ export function Screen({ children, contentStyle }: { children: ReactNode; conten
 export function Header({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
   return (
     <View style={styles.header}>
+      <View style={styles.headerAccent} />
       <View style={styles.headerCopy}>
         <Text style={styles.h1}>{title}</Text>
         {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
@@ -74,7 +79,7 @@ export function IconBubble({ icon, accent = "cyan", size = 44 }: { icon: Compone
 
 export function KpiCard({ label, value, accent = "cyan", icon }: { label: string; value: string; accent?: Accent; icon?: ComponentProps<typeof Ionicons>["name"] }) {
   return (
-    <Card style={styles.kpi}>
+    <Card style={[styles.kpi, { borderTopColor: accentColors[accent] }]}>
       <View style={styles.kpiTop}>{icon ? <IconBubble icon={icon} accent={accent} size={38} /> : <View style={[styles.dot, { backgroundColor: accentColors[accent] }]} />}</View>
       <Text style={styles.kpiValue}>{value}</Text>
       <Text style={styles.kpiLabel}>{label}</Text>
@@ -93,7 +98,7 @@ export function Button({ label, onPress, variant = "primary", accent = "cyan", i
   const backgroundColor = variant === "primary" ? accentColors[accent] : variant === "danger" ? colors.error : variant === "secondary" ? colors.white : "transparent";
   const foreground = variant === "primary" || variant === "danger" ? colors.white : variant === "ghost" ? colors.muted : colors.dark;
   return (
-    <Pressable disabled={disabled || loading} onPress={onPress} style={({ pressed }) => [styles.button, { backgroundColor, borderWidth: variant === "secondary" ? 1 : 0, opacity: pressed || disabled ? 0.72 : 1 }, style]}>
+    <Pressable disabled={disabled || loading} onPress={onPress} style={({ pressed }) => [styles.button, variant === "primary" && styles.primaryButton, { backgroundColor, borderWidth: variant === "secondary" ? 1 : 0, opacity: disabled ? 0.5 : 1, transform: [{ scale: pressed ? 0.975 : 1 }] }, style]}>
       {loading ? <ActivityIndicator color={foreground} /> : icon ? <Ionicons name={icon} size={17} color={foreground} /> : null}
       <Text style={[styles.buttonText, { color: foreground }]}>{label}</Text>
     </Pressable>
@@ -153,40 +158,45 @@ export function DataRow({ title, subtitle, amount, status, onPress }: { title: s
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  screen: { padding: spacing.lg, paddingBottom: 104, gap: spacing.lg },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  ambient: { ...StyleSheet.absoluteFillObject, overflow: "hidden" },
+  ambientCyan: { position: "absolute", width: 230, height: 230, borderRadius: 115, backgroundColor: "rgba(16,175,233,0.08)", top: -105, right: -82 },
+  ambientPurple: { position: "absolute", width: 190, height: 190, borderRadius: 95, backgroundColor: "rgba(125,31,232,0.055)", top: 255, left: -110 },
+  screen: { padding: spacing.lg, paddingTop: spacing.xl, paddingBottom: 104, gap: spacing.xl },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, minHeight: 54 },
+  headerAccent: { width: 4, height: 38, borderRadius: radii.pill, backgroundColor: colors.cyan },
   headerCopy: { flex: 1 },
-  h1: { color: colors.dark, fontFamily: fonts.extrabold, fontSize: 23, lineHeight: 30 },
-  subtitle: { color: colors.muted, fontFamily: fonts.regular, fontSize: 13, marginTop: 3, lineHeight: 19 },
-  h2: { color: colors.dark, fontFamily: fonts.bold, fontSize: 16 },
-  card: { backgroundColor: colors.white, borderColor: colors.border, borderWidth: 1, borderRadius: radii.lg, padding: spacing.lg, ...shadows.card },
+  h1: { color: colors.dark, fontFamily: fonts.extrabold, fontSize: 25, letterSpacing: -0.55, lineHeight: 31 },
+  subtitle: { color: colors.muted, fontFamily: fonts.regular, fontSize: 13, marginTop: 4, lineHeight: 19 },
+  h2: { color: colors.dark, fontFamily: fonts.bold, fontSize: 17, letterSpacing: -0.2 },
+  card: { backgroundColor: "rgba(255,255,255,0.97)", borderColor: "rgba(221,229,238,0.9)", borderWidth: 1, borderRadius: radii.xl, padding: spacing.lg, ...shadows.card },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
-  kpi: { width: "47.8%", minHeight: 125 },
+  kpi: { width: "47.8%", minHeight: 132, borderTopWidth: 3 },
   kpiTop: { minHeight: 40, justifyContent: "center" },
-  kpiValue: { color: colors.dark, fontFamily: fonts.extrabold, fontSize: 19, marginTop: 10 },
-  kpiLabel: { color: colors.muted, fontFamily: fonts.medium, fontSize: 11, marginTop: 4 },
+  kpiValue: { color: colors.dark, fontFamily: fonts.extrabold, fontSize: 20, letterSpacing: -0.35, marginTop: 11 },
+  kpiLabel: { color: colors.muted, fontFamily: fonts.medium, fontSize: 11, marginTop: 5, lineHeight: 15 },
   dot: { width: 10, height: 10, borderRadius: 5 },
-  iconBubble: { alignItems: "center", justifyContent: "center" },
-  button: { minHeight: 44, borderRadius: radii.md, paddingHorizontal: 16, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 7, borderColor: colors.border },
+  iconBubble: { alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.8)" },
+  button: { minHeight: 46, borderRadius: radii.lg, paddingHorizontal: 17, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 7, borderColor: colors.border },
+  primaryButton: { shadowColor: colors.cyan, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.2, shadowRadius: 9, elevation: 3 },
   buttonText: { fontFamily: fonts.semibold, fontSize: 14 },
-  fieldWrap: { gap: 6 },
-  label: { color: "#374151", fontFamily: fonts.medium, fontSize: 13 },
-  input: { minHeight: 46, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, backgroundColor: colors.white, paddingHorizontal: 12, color: colors.dark, fontFamily: fonts.regular, fontSize: 14 },
+  fieldWrap: { gap: 7 },
+  label: { color: "#334155", fontFamily: fonts.semibold, fontSize: 12, letterSpacing: 0.1 },
+  input: { minHeight: 49, borderWidth: 1, borderColor: colors.border, borderRadius: radii.lg, backgroundColor: "rgba(255,255,255,0.94)", paddingHorizontal: 14, color: colors.dark, fontFamily: fonts.regular, fontSize: 14, shadowColor: "#173B62", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.035, shadowRadius: 5, elevation: 1 },
   multiline: { minHeight: 96, paddingTop: 12, textAlignVertical: "top" },
   inputError: { borderColor: colors.error },
   error: { color: colors.error, fontFamily: fonts.regular, fontSize: 11 },
-  badge: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: radii.pill, alignSelf: "flex-start" },
+  badge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: radii.pill, alignSelf: "flex-start", borderWidth: 1, borderColor: "rgba(255,255,255,0.75)" },
   badgeText: { fontFamily: fonts.semibold, fontSize: 10 },
   sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
   segments: { gap: 8 },
-  segment: { borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white, paddingVertical: 9, paddingHorizontal: 13 },
+  segment: { borderRadius: radii.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: "rgba(255,255,255,0.94)", paddingVertical: 10, paddingHorizontal: 15 },
   segmentText: { color: colors.muted, fontFamily: fonts.medium, fontSize: 12 },
   segmentTextSelected: { color: colors.white, fontFamily: fonts.semibold },
   toggleRow: { minHeight: 62, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
   toggleCopy: { flex: 1 },
   rowTitle: { color: colors.dark, fontFamily: fonts.semibold, fontSize: 13 },
   rowMeta: { color: colors.muted, fontFamily: fonts.regular, fontSize: 11, lineHeight: 16, marginTop: 3 },
-  dataRow: { minHeight: 66, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", paddingVertical: 10 },
+  dataRow: { minHeight: 68, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, borderBottomWidth: 1, borderBottomColor: "#EDF2F7", paddingVertical: 11 },
   dataCopy: { flex: 1 },
   dataEnd: { alignItems: "flex-end", gap: 5, flexDirection: "row" },
   amount: { color: colors.dark, fontFamily: fonts.bold, fontSize: 13 },

@@ -2,11 +2,14 @@
   "expo": {
     "name": "INRFS Financer",
     "slug": "inrfs-financer-mobile",
+    "scheme": "inrfs-financer",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/inrfs-app-icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
+      "image": "./assets/inrfs-logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#F8FAFC"
     },
@@ -17,13 +20,15 @@
     "android": {
       "versionCode": 4,
       "adaptiveIcon": {
+        "foregroundImage": "./assets/inrfs-adaptive-icon.png",
         "backgroundColor": "#F8FAFC"
       },
       "package": "com.inrfs.financer",
       "edgeToEdgeEnabled": true
     },
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "favicon": "./assets/inrfs-app-icon.png"
     },
     "plugins": [
       [

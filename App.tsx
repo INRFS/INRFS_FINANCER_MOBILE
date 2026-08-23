@@ -44,7 +44,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <NavigationContainer>
+        <NavigationContainer linking={{ prefixes: ["inrfs-financer://", "https://app.inrfs.com"], config: { screens: { PortalSelection: "", FinancerLogin: "financer/login", AdminLogin: "admin/login", ResetPassword: "reset-password", LegalNotice: "legal/:type" } } }}>
           <StatusBar style="dark" />
           <RootNavigator />
         </NavigationContainer>

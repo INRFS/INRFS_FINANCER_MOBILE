@@ -6,7 +6,7 @@ import { Alert, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, Vie
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Logo } from "../../components/Logo";
-import { Button, Card, Field, IconBubble, Screen } from "../../components/ui";
+import { Button, Card, Field, Header, IconBubble, Screen } from "../../components/ui";
 import { colors, fonts, radii, shadows } from "../../theme/tokens";
 import type { RootStackParamList } from "../../types/navigation";
 import { api } from "../../services/apiClient";
@@ -28,6 +28,7 @@ export function PortalSelectionScreen({ navigation }: PortalProps) {
           <PortalCard icon="person-outline" accent="cyan" title="Financer Portal" subtitle="Manage customers, loans & collections" onPress={() => navigation.navigate("FinancerLogin")} />
           <PortalCard icon="grid-outline" accent="purple" title="Admin Portal" subtitle="Platform management & oversight" onPress={() => navigation.navigate("AdminLogin")} />
         </View>
+        <View style={styles.legalLinks}><Text style={styles.link} onPress={() => navigation.navigate("LegalNotice", { type: "privacy" })}>Privacy Policy</Text><Text style={styles.link} onPress={() => navigation.navigate("LegalNotice", { type: "terms" })}>Terms of Use</Text></View>
         <Text style={styles.copyright}>INRFS © 2026 · Secure Fintech Platform</Text>
       </SafeAreaView>
     </LinearGradient>
@@ -47,7 +48,6 @@ export function FinancerLoginScreen({ navigation }: LoginProps) {
   const [forgotPassword, setForgotPassword] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  void submitting;
   const submit = async () => {
     const digits = mobile.replace(/\D/g, "");
     if (digits.length < 10) return setError("Enter a valid 10-digit mobile number");
@@ -64,16 +64,14 @@ export function FinancerLoginScreen({ navigation }: LoginProps) {
     catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Unable to sign in."); }
     finally { setSubmitting(false); }
   };
-  return <AuthShell><Logo size={50} /><View style={styles.authHeading}><Text style={styles.authTitle}>{forgotPassword ? "Forgot password?" : "Welcome back"}</Text><Text style={styles.authSub}>{forgotPassword ? "Enter your registered mobile number to reset your password." : "Manage your customers and loans with ease."}</Text></View><Field label="Mobile Number" placeholder="+91 98765 43210" keyboardType="phone-pad" value={mobile} onChangeText={(v) => { setMobile(v); setError(""); }} />{!forgotPassword ? <><View><Field label="Password" placeholder="Enter your password" secureTextEntry={!passwordVisible} value={password} onChangeText={(v) => { setPassword(v); setError(""); }} /><Pressable onPress={() => setPasswordVisible(!passwordVisible)} style={styles.eye}><Ionicons name={passwordVisible ? "eye-off-outline" : "eye-outline"} size={20} color={colors.muted} /></Pressable></View><Pressable onPress={() => { setForgotPassword(true); setError(""); }}><Text style={styles.forgotLink}>Forgot password?</Text></Pressable></> : null}{error ? <Text style={styles.formError}>{error}</Text> : null}<Button label={forgotPassword ? "Send OTP" : "Login"} onPress={submit} style={styles.fullButton} />{forgotPassword ? <Button label="Back to Login" icon="arrow-back" variant="ghost" onPress={() => { setForgotPassword(false); setError(""); }} /> : <><Text style={styles.authLinkText}>New to INRFS? <Text style={styles.link} onPress={() => navigation.navigate("FinancerRegister")}>Create account</Text></Text><Button label="Back to portal selection" icon="arrow-back" variant="ghost" onPress={() => navigation.navigate("PortalSelection")} /></>}</AuthShell>;
+  return <AuthShell><Logo size={50} /><View style={styles.authHeading}><Text style={styles.authTitle}>{forgotPassword ? "Forgot password?" : "Welcome back"}</Text><Text style={styles.authSub}>{forgotPassword ? "Enter your registered mobile number to reset your password." : "Manage your customers and loans with ease."}</Text></View><Field label="Mobile Number" placeholder="+91 98765 43210" keyboardType="phone-pad" value={mobile} onChangeText={(v) => { setMobile(v); setError(""); }} />{!forgotPassword ? <><View><Field label="Password" placeholder="Enter your password" secureTextEntry={!passwordVisible} value={password} onChangeText={(v) => { setPassword(v); setError(""); }} /><Pressable onPress={() => setPasswordVisible(!passwordVisible)} style={styles.eye}><Ionicons name={passwordVisible ? "eye-off-outline" : "eye-outline"} size={20} color={colors.muted} /></Pressable></View><Pressable onPress={() => { setForgotPassword(true); setError(""); }}><Text style={styles.forgotLink}>Forgot password?</Text></Pressable></> : null}{error ? <Text style={styles.formError}>{error}</Text> : null}<Button loading={submitting} label={forgotPassword ? "Send reset instructions" : "Login"} onPress={submit} style={styles.fullButton} />{forgotPassword ? <Button label="Back to Login" icon="arrow-back" variant="ghost" onPress={() => { setForgotPassword(false); setError(""); }} /> : <><Text style={styles.authLinkText}>New to INRFS? <Text style={styles.link} onPress={() => navigation.navigate("FinancerRegister")}>Create account</Text></Text><Button label="Back to portal selection" icon="arrow-back" variant="ghost" onPress={() => navigation.navigate("PortalSelection")} /></>}</AuthShell>;
 }
 
 type RegisterProps = NativeStackScreenProps<RootStackParamList, "FinancerRegister">;
 export function FinancerRegisterScreen({ navigation }: RegisterProps) {
-  const [form, setForm] = useState({ name: "", business: "", mobile: "", email: "", city: "", state: "", password: "" });
-  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [form, setForm] = useState({ name: "", business: "", mobile: "", email: "", city: "", state: "" });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  void submitting;
   const update = (key: keyof typeof form, value: string) => setForm((old) => ({ ...old, [key]: value }));
   const submit = async () => {
     if (Object.values(form).some((v) => !v.trim())) return setError("Complete all fields to continue");
@@ -85,7 +83,7 @@ export function FinancerRegisterScreen({ navigation }: RegisterProps) {
     } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Unable to create the account."); }
     finally { setSubmitting(false); }
   };
-  return <AuthShell scroll><Logo size={46} /><View style={styles.authHeading}><Text style={styles.authTitle}>Create your INRFS account</Text><Text style={styles.authSub}>Join thousands of financers managing loans digitally</Text></View><Field label="Full Name" placeholder="Suresh Patel" value={form.name} onChangeText={(v) => update("name", v)} /><Field label="Business / Finance Name" placeholder="Patel Finance Services" value={form.business} onChangeText={(v) => update("business", v)} /><Field label="Mobile Number" placeholder="+91 98765 43210" keyboardType="phone-pad" value={form.mobile} onChangeText={(v) => update("mobile", v)} /><Field label="Email Address" placeholder="suresh@patelfinance.in" keyboardType="email-address" autoCapitalize="none" value={form.email} onChangeText={(v) => update("email", v)} /><Field label="City" placeholder="Ahmedabad" value={form.city} onChangeText={(v) => update("city", v)} /><Field label="State" placeholder="Gujarat" value={form.state} onChangeText={(v) => update("state", v)} /><View><Field label="Password" placeholder="Create a password" secureTextEntry={!passwordVisible} value={form.password} onChangeText={(v) => update("password", v)} /><Pressable onPress={() => setPasswordVisible(!passwordVisible)} style={styles.eye}><Ionicons name={passwordVisible ? "eye-off-outline" : "eye-outline"} size={20} color={colors.muted} /></Pressable></View>{error ? <Text style={styles.formError}>{error}</Text> : null}<Button label="Send OTP to Verify" onPress={submit} /><Text style={styles.authLinkText}>Already have an account? <Text style={styles.link} onPress={() => navigation.navigate("FinancerLogin")}>Login</Text></Text></AuthShell>;
+  return <AuthShell scroll><Logo size={46} /><View style={styles.authHeading}><Text style={styles.authTitle}>Create your INRFS account</Text><Text style={styles.authSub}>Join thousands of financers managing loans digitally</Text></View><Field label="Full Name" placeholder="Suresh Patel" value={form.name} onChangeText={(v) => update("name", v)} /><Field label="Business / Finance Name" placeholder="Patel Finance Services" value={form.business} onChangeText={(v) => update("business", v)} /><Field label="Mobile Number" placeholder="+91 98765 43210" keyboardType="phone-pad" value={form.mobile} onChangeText={(v) => update("mobile", v)} /><Field label="Email Address" placeholder="suresh@patelfinance.in" keyboardType="email-address" autoCapitalize="none" value={form.email} onChangeText={(v) => update("email", v)} /><Field label="City" placeholder="Ahmedabad" value={form.city} onChangeText={(v) => update("city", v)} /><Field label="State" placeholder="Gujarat" value={form.state} onChangeText={(v) => update("state", v)} />{error ? <Text style={styles.formError}>{error}</Text> : null}<Button loading={submitting} label="Send OTP to Verify" onPress={submit} /><Text style={styles.authLinkText}>Already have an account? <Text style={styles.link} onPress={() => navigation.navigate("FinancerLogin")}>Login</Text></Text></AuthShell>;
 }
 
 type OtpProps = NativeStackScreenProps<RootStackParamList, "FinancerOtp">;
@@ -94,23 +92,24 @@ export function FinancerOtpScreen({ navigation, route }: OtpProps) {
   const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  void submitting;
+  const [challengeId, setChallengeId] = useState(route.params.challengeId);
   const verify = async () => {
     if (otp.length !== 6) return setError("Please enter the complete 6-digit OTP.");
     setSubmitting(true); setError("");
     try {
       if (route.params.registering) {
-        await api.post("/auth/otp/verify-registration", { challengeId: route.params.challengeId, code: otp }, { auth: false });
+        await api.post("/auth/otp/verify-registration", { challengeId, code: otp }, { auth: false });
         Alert.alert("Account created", "Your account was verified. Sign in with the temporary password sent to you.");
         navigation.replace("FinancerLogin");
       } else {
-        const tokens = await api.post("/auth/otp/verify", { challengeId: route.params.challengeId, code: otp }, { auth: false });
+        const tokens = await api.post("/auth/otp/verify", { challengeId, code: otp }, { auth: false });
         await completeLogin(tokens);
       }
     } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "OTP verification failed."); }
     finally { setSubmitting(false); }
   };
-  return <AuthShell><Logo size={44} /><IconBubble icon="call-outline" accent="cyan" size={64} /><View style={styles.authHeading}><Text style={styles.authTitle}>Verify your mobile number</Text><Text style={styles.authSub}>Enter the 6-digit OTP sent to your mobile number.</Text><Text style={styles.mobileText}>{route.params.mobile}</Text></View><Field label="6-digit OTP" placeholder="• • • • • •" keyboardType="number-pad" maxLength={6} value={otp} onChangeText={(v) => { setOtp(v.replace(/\D/g, "")); setError(""); }} error={error} /><Button label="Verify OTP" onPress={verify} /><View style={styles.twoButtons}><Button label="Resend OTP" variant="secondary" style={styles.flex} onPress={() => { setOtp(""); setError(""); Alert.alert("OTP resent", "A fresh verification code has been sent."); }} /><Button label="Change Number" variant="secondary" style={styles.flex} onPress={() => navigation.replace(route.params.registering ? "FinancerRegister" : "FinancerLogin")} /></View><Text style={styles.demo}>Demo OTP: 123456</Text></AuthShell>;
+  const resend = async () => { setOtp(""); setError(""); setSubmitting(true); try { const challenge = await api.post("/auth/otp/request", { destination: route.params.mobile, purpose: route.params.registering ? "Registration" : "Login" }, { auth: false }); setChallengeId(challenge.challengeId); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Unable to resend the OTP."); } finally { setSubmitting(false); } };
+  return <AuthShell><Logo size={44} /><IconBubble icon="call-outline" accent="cyan" size={64} /><View style={styles.authHeading}><Text style={styles.authTitle}>Verify your {route.params.admin ? "email" : "mobile number"}</Text><Text style={styles.authSub}>Enter the 6-digit OTP sent to your registered contact.</Text><Text style={styles.mobileText}>{route.params.mobile}</Text></View><Field label="6-digit OTP" placeholder="• • • • • •" keyboardType="number-pad" maxLength={6} value={otp} onChangeText={(v) => { setOtp(v.replace(/\D/g, "")); setError(""); }} error={error} /><Button loading={submitting} label="Verify OTP" onPress={verify} /><View style={styles.twoButtons}><Button disabled={submitting} label="Resend OTP" variant="secondary" style={styles.flex} onPress={() => void resend()} /><Button disabled={submitting} label="Change Number" variant="secondary" style={styles.flex} onPress={() => navigation.replace(route.params.registering ? "FinancerRegister" : route.params.admin ? "AdminLogin" : "FinancerLogin")} /></View></AuthShell>;
 }
 
 type WelcomeProps = NativeStackScreenProps<RootStackParamList, "FinancerWelcome">;
@@ -121,7 +120,6 @@ export function FinancerWelcomeScreen({ navigation }: WelcomeProps) {
 type AdminProps = NativeStackScreenProps<RootStackParamList, "AdminLogin">;
 export function AdminLoginScreen({ navigation }: AdminProps) {
   const [submitting, setSubmitting] = useState(false);
-  void submitting;
   const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [visible, setVisible] = useState(false); const [remember, setRemember] = useState(true); const [error, setError] = useState("");
   const submit = async () => {
     if (!email.includes("@") || password.length < 4) return setError("Enter a valid email address and password");
@@ -130,7 +128,20 @@ export function AdminLoginScreen({ navigation }: AdminProps) {
     catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Unable to sign in."); }
     finally { setSubmitting(false); }
   };
-  return <AuthShell><Logo size={50} /><View style={styles.adminBadge}><Ionicons name="shield-checkmark-outline" size={20} color={colors.purple} /><Text style={styles.adminBadgeText}>ADMIN PORTAL</Text></View><View style={styles.authHeading}><Text style={styles.authTitle}>INRFS Administration</Text><Text style={styles.authSub}>Secure access for platform administrators</Text></View><Field label="Email Address" placeholder="admin@inrfs.in" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={(v) => { setEmail(v); setError(""); }} /><View><Field label="Password" placeholder="Enter password" secureTextEntry={!visible} value={password} onChangeText={(v) => { setPassword(v); setError(""); }} /><Pressable onPress={() => setVisible(!visible)} style={styles.eye}><Ionicons name={visible ? "eye-off-outline" : "eye-outline"} size={20} color={colors.muted} /></Pressable></View>{error ? <Text style={styles.formError}>{error}</Text> : null}<View style={styles.rememberRow}><Pressable onPress={() => setRemember(!remember)} style={styles.checkRow}><Ionicons name={remember ? "checkbox" : "square-outline"} color={colors.purple} size={21} /><Text style={styles.rememberText}>Remember Me</Text></Pressable><Text style={[styles.link, { color: colors.purple }]} onPress={() => Alert.alert("Password reset", "Reset instructions have been sent locally for this demo.")}>Forgot Password?</Text></View><Button label="Login" accent="purple" onPress={submit} /><Button label="Back to portal selection" icon="arrow-back" variant="ghost" onPress={() => navigation.navigate("PortalSelection")} /></AuthShell>;
+  const forgot = async () => { if (!email.includes("@")) return setError("Enter your registered email address first."); setSubmitting(true); setError(""); try { await api.post("/auth/password/forgot", { email }, { auth: false }); setError("If this account exists, password reset instructions have been sent."); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Unable to request a password reset."); } finally { setSubmitting(false); } };
+  return <AuthShell><Logo size={50} /><View style={styles.adminBadge}><Ionicons name="shield-checkmark-outline" size={20} color={colors.purple} /><Text style={styles.adminBadgeText}>ADMIN PORTAL</Text></View><View style={styles.authHeading}><Text style={styles.authTitle}>INRFS Administration</Text><Text style={styles.authSub}>Secure access for platform administrators</Text></View><Field label="Email Address" placeholder="admin@inrfs.in" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={(v) => { setEmail(v); setError(""); }} /><View><Field label="Password" placeholder="Enter password" secureTextEntry={!visible} value={password} onChangeText={(v) => { setPassword(v); setError(""); }} /><Pressable onPress={() => setVisible(!visible)} style={styles.eye}><Ionicons name={visible ? "eye-off-outline" : "eye-outline"} size={20} color={colors.muted} /></Pressable></View>{error ? <Text style={styles.formError}>{error}</Text> : null}<View style={styles.rememberRow}><Pressable onPress={() => setRemember(!remember)} style={styles.checkRow}><Ionicons name={remember ? "checkbox" : "square-outline"} color={colors.purple} size={21} /><Text style={styles.rememberText}>Remember Me</Text></Pressable><Text style={[styles.link, { color: colors.purple }]} onPress={() => void forgot()}>Forgot Password?</Text></View><Button loading={submitting} label="Login" accent="purple" onPress={submit} /><Button label="Back to portal selection" icon="arrow-back" variant="ghost" onPress={() => navigation.navigate("PortalSelection")} /></AuthShell>;
+}
+
+type ResetProps = NativeStackScreenProps<RootStackParamList, "ResetPassword">;
+export function ResetPasswordScreen({ navigation, route }: ResetProps) {
+  const [token, setToken] = useState(route.params?.token ?? ""); const [password, setPassword] = useState(""); const [confirmPassword, setConfirmPassword] = useState(""); const [error, setError] = useState(""); const [submitting, setSubmitting] = useState(false);
+  const submit = async () => { if (password !== confirmPassword) return setError("Passwords do not match."); if (password.length < 10) return setError("Use at least 10 characters."); if (!token.trim()) return setError("Reset token is required."); setSubmitting(true); setError(""); try { await api.post("/auth/password/reset", { token: token.trim(), newPassword: password, confirmPassword }, { auth: false }); Alert.alert("Password reset", "Sign in with your new password."); navigation.replace("FinancerLogin"); } catch (e) { setError(e instanceof Error ? e.message : "Password reset failed."); } finally { setSubmitting(false); } };
+  return <AuthShell><Logo size={48}/><View style={styles.authHeading}><Text style={styles.authTitle}>Create a new password</Text><Text style={styles.authSub}>Use the reset token from your password-reset message.</Text></View><Field label="Reset token" value={token} onChangeText={setToken}/><Field label="New password" value={password} onChangeText={setPassword} secureTextEntry/><Field label="Confirm password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry/>{error ? <Text style={styles.formError}>{error}</Text> : null}<Button loading={submitting} label="Reset password" onPress={() => void submit()}/><Button label="Back to sign in" variant="ghost" onPress={() => navigation.replace("FinancerLogin")}/></AuthShell>;
+}
+
+type LegalProps = NativeStackScreenProps<RootStackParamList, "LegalNotice">;
+export function LegalNoticeScreen({ navigation, route }: LegalProps) {
+  const privacy = route.params.type === "privacy"; return <Screen><Button label="Back to INRFS" icon="arrow-back" variant="ghost" onPress={() => navigation.goBack()}/><Logo size={42}/><Header title={privacy ? "Privacy Policy" : "Terms of Use"} subtitle="Legal information"/><Card><Text style={styles.legalStatus}>Draft placeholder — replace with content reviewed and approved by your legal adviser before public launch.</Text><Text style={styles.legalHeading}>{privacy ? "How information is handled" : "Using the platform"}</Text><Text style={styles.legalBody}>{privacy ? "INRFS processes account and operational information required to provide its financer workflows. The final policy should identify the data controller, retention periods, subprocessors, user rights, and applicable contact details." : "Access to INRFS is intended for authorized users operating within their assigned role. The final terms should define account responsibilities, acceptable use, service availability, fees, limitations, and dispute handling."}</Text><Text style={styles.legalHeading}>Questions</Text><Text style={styles.legalBody}>Contact support@inrfs.in for platform-related enquiries.</Text></Card></Screen>;
 }
 
 function AuthShell({ children, scroll = false }: { children: React.ReactNode; scroll?: boolean }) {
@@ -138,7 +149,7 @@ function AuthShell({ children, scroll = false }: { children: React.ReactNode; sc
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 }, portalSafe: { flex: 1, alignItems: "center", justifyContent: "center", padding: 22, overflow: "hidden" },
+  flex: { flex: 1 }, portalSafe: { flex: 1, alignItems: "center", justifyContent: "center", padding: 22, overflow: "hidden" }, legalLinks: { flexDirection: "row", gap: 20, marginTop: 20 }, legalStatus: { color: colors.orange, fontFamily: fonts.medium, fontSize: 13, lineHeight: 20, marginBottom: 18 }, legalHeading: { color: colors.dark, fontFamily: fonts.bold, fontSize: 17, marginTop: 14, marginBottom: 6 }, legalBody: { color: colors.muted, fontFamily: fonts.regular, fontSize: 14, lineHeight: 22 },
   petal: { position: "absolute", width: 270, height: 150, borderRadius: 100, backgroundColor: colors.purple, opacity: 0.035 },
   petalTop: { right: -100, top: 80, transform: [{ rotate: "45deg" }] }, petalBottom: { left: -100, bottom: 40, transform: [{ rotate: "-30deg" }] },
   portalTitle: { alignItems: "center", marginTop: 36, marginBottom: 34 }, title: { color: colors.dark, fontFamily: fonts.extrabold, fontSize: 25, textAlign: "center" }, subtitle: { color: colors.muted, fontFamily: fonts.regular, fontSize: 14, marginTop: 8 },
