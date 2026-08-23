@@ -1,0 +1,38 @@
+import { StyleSheet } from "react-native";
+import { colors, fonts } from "../../theme/tokens";
+
+export const s = StyleSheet.create({
+  ledgerCustomer: { minHeight: 64, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 10, flexDirection: "row", alignItems: "center", gap: 10, marginTop: 8 }, 
+  ledgerCustomerActive: { borderColor: colors.cyan, backgroundColor: colors.cyanSoft }, 
+  ledgerAvatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.cyanSoft, alignItems: "center", justifyContent: "center" }, 
+  ledgerAvatarText: { color: colors.cyan, fontFamily: fonts.bold, fontSize: 13 }, 
+  ledgerAvatarLarge: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.cyanSoft, alignItems: "center", justifyContent: "center" }, 
+  ledgerAvatarTextLarge: { color: colors.cyan, fontFamily: fonts.extrabold, fontSize: 18 }, 
+  ledgerEntry: { marginTop: 10, padding: 12 }, 
+  balance: { color: colors.dark, fontFamily: fonts.extrabold, fontSize: 15 }, 
+  debit: { color: colors.error, fontFamily: fonts.semibold, fontSize: 11, marginTop: 9 }, 
+  credit: { color: "#16A34A", fontFamily: fonts.semibold, fontSize: 11, marginTop: 9 }, 
+  profileHero: { flexDirection: "row", alignItems: "center", gap: 13 }, 
+  app: { flex: 1, backgroundColor: colors.background }, 
+  body: { flex: 1 }, 
+  top: { minHeight: 60, paddingHorizontal: 14, gap: 9, flexDirection: "row", alignItems: "center", backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.border }, 
+  portal: { color: colors.cyan, fontFamily: fonts.bold, fontSize: 9 }, 
+  user: { flex: 1, color: colors.muted, fontFamily: fonts.medium, fontSize: 11, textAlign: "right" }, 
+  nav: { minHeight: 69, flexDirection: "row", backgroundColor: colors.white, borderTopWidth: 1, borderTopColor: colors.border }, 
+  navItem: { flex: 1, alignItems: "center", justifyContent: "center", gap: 4 }, 
+  navText: { color: colors.subtle, fontFamily: fonts.medium, fontSize: 9 }, 
+  active: { color: colors.cyan }, 
+  row: { flexDirection: "row", gap: 8 }, 
+  flex: { flex: 1 }, 
+  muted: { color: colors.muted, fontFamily: fonts.regular, fontSize: 12, lineHeight: 18 }, 
+  error: { color: colors.error, fontFamily: fonts.medium, fontSize: 12 }, 
+  title: { color: colors.dark, fontFamily: fonts.bold, fontSize: 14 }, 
+  meta: { color: colors.subtle, fontFamily: fonts.medium, fontSize: 10, marginTop: 8 }, 
+  label: { color: colors.dark, fontFamily: fonts.semibold, fontSize: 13 }, 
+  gap: { gap: 14 }, 
+  overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(15,23,42,.45)" }, 
+  sheet: { maxHeight: "88%", backgroundColor: colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24 }, 
+  form: { padding: 20, gap: 16 }, 
+  between: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10 }, 
+  sheetTitle: { flex: 1, color: colors.dark, fontFamily: fonts.bold, fontSize: 19 } 
+});
