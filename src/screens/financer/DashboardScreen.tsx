@@ -5,9 +5,12 @@ import { platformApi } from "../../services/platformApi";
 import { useRemote, RemoteState } from "./shared";
 import { s } from "./styles";
 
+import { useNavigation } from "@react-navigation/native";
+
 const rupees = (v: unknown) => `₹${Number(v ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
-export function DashboardScreen({ go }: { go: (p: any) => void }) {
+export function DashboardScreen() {
+  const navigation = useNavigation<any>();
   const load = useCallback(() => platformApi.dashboard.financer(), []); 
   const state = useRemote(load, {} as any); 
   const d = state.data;
@@ -27,8 +30,8 @@ export function DashboardScreen({ go }: { go: (p: any) => void }) {
         <DataRow title="Overdue" amount={rupees(d.overdueAmount)}/>
       </Card>
       <View style={s.row}>
-        <Button style={s.flex} label="Record payment" onPress={() => go("Dues")}/>
-        <Button style={s.flex} label="Add customer" variant="secondary" onPress={() => go("Customers")}/>
+        <Button style={s.flex} label="Record payment" onPress={() => navigation.navigate("Payments")}/>
+        <Button style={s.flex} label="Add customer" variant="secondary" onPress={() => navigation.navigate("Customers")}/>
       </View>
     </Screen>
   );

@@ -13,6 +13,7 @@ export function SupportScreen() {
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("Technical");
+  const [priority, setPriority] = useState("Medium");
   const [busy, setBusy] = useState(false);
 
   const create = async () => {
@@ -24,7 +25,7 @@ export function SupportScreen() {
       await platformApi.support.create({
         subject: subject.trim(),
         category,
-        priority: "Medium",
+        priority,
         description: description.trim()
       });
       setOpen(false);
@@ -47,6 +48,8 @@ export function SupportScreen() {
             <Field label="Subject" value={subject} onChangeText={setSubject} />
             <Text style={s.meta}>Category</Text>
             <Segmented options={["Technical", "Billing", "Account", "Other"]} value={category} onChange={setCategory} />
+            <Text style={s.meta}>Priority</Text>
+            <Segmented options={["Low", "Medium", "High"]} value={priority} onChange={setPriority} />
             <Field label="Description" value={description} onChangeText={setDescription} multiline />
             <Button loading={busy} label="Submit ticket" onPress={() => void create()} />
           </View>
