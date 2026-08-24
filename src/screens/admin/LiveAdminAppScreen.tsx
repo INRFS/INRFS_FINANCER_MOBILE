@@ -13,10 +13,11 @@ import { AdminServiceChargesScreen } from "./AdminServiceChargesScreen";
 import { AdminNotificationsScreen } from "./AdminNotificationsScreen";
 import { AdminSupportScreen } from "./AdminSupportScreen";
 import { AdminReportsScreen } from "./AdminReportsScreen";
+import { AdminFinancerDetailsPanel, AdminSmsUsagePanel, AdminSubscriptionsPanel } from "./AdminPlatformManagementScreen";
 import { colors, fonts, radii } from "../../theme/tokens";
 
 type Page = "Dashboard" | "Financers" | "Billing" | "Collections" | "More";
-type MorePage = "Service Charges" | "Reports" | "Notifications" | "Operations" | "Settings" | "Support";
+type MorePage = "Financer Details" | "Service Charges" | "Subscriptions" | "SMS Usage" | "Reports" | "Notifications" | "Operations" | "Settings" | "Support";
 type Action = "assign" | "promise" | "followup" | "call" | "payment" | null;
 const money = (value: unknown) => `₹${Number(value ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 const today = () => new Date().toISOString().slice(0, 10);
@@ -30,12 +31,12 @@ export function LiveAdminAppScreen() {
 function AdminMore() {
   const { hasRole } = useAuth();
   const allowed: MorePage[] = ["Reports", "Operations"];
-  if (hasRole("SuperAdmin", "Admin")) allowed.unshift("Service Charges");
+  if (hasRole("SuperAdmin", "Admin")) allowed.unshift("Financer Details", "Service Charges", "Subscriptions", "SMS Usage");
   if (hasRole("SuperAdmin", "Admin")) allowed.push("Notifications", "Settings");
   if (hasRole("SuperAdmin", "Admin", "SupportAgent")) allowed.push("Support");
   const labels = Array.from(new Set(allowed));
   const [section, setSection] = useState<MorePage>(labels[0] ?? "Reports");
-  return <Screen><Header title={section} subtitle="Role-authorized administration workflow"/><View style={styles.gap}><View><Text style={styles.muted}>Available for your assigned web portal roles</Text></View></View>{labels.length > 1 ? <View style={styles.gap}><ScrollView horizontal showsHorizontalScrollIndicator={false}><View style={styles.row}>{labels.map(label => <Button key={label} label={label} variant={section === label ? "primary" : "secondary"} accent="purple" onPress={() => setSection(label)}/>)}</View></ScrollView></View> : null}{section === "Service Charges" ? <ServiceCharges/> : section === "Notifications" ? <AdminNotifications/> : section === "Operations" ? <Operations/> : section === "Settings" ? <AdminSettings/> : section === "Support" ? <AdminSupport/> : <AdminReports/>}</Screen>;
+  return <Screen><Header title={section} subtitle="Role-authorized administration workflow"/><View style={styles.gap}><View><Text style={styles.muted}>Available for your assigned web portal roles</Text></View></View>{labels.length > 1 ? <View style={styles.gap}><ScrollView horizontal showsHorizontalScrollIndicator={false}><View style={styles.row}>{labels.map(label => <Button key={label} label={label} variant={section === label ? "primary" : "secondary"} accent="purple" onPress={() => setSection(label)}/>)}</View></ScrollView></View> : null}{section === "Financer Details" ? <AdminFinancerDetailsPanel/> : section === "Service Charges" ? <ServiceCharges/> : section === "Subscriptions" ? <AdminSubscriptionsPanel/> : section === "SMS Usage" ? <AdminSmsUsagePanel/> : section === "Notifications" ? <AdminNotifications/> : section === "Operations" ? <Operations/> : section === "Settings" ? <AdminSettings/> : section === "Support" ? <AdminSupport/> : <AdminReports/>}</Screen>;
 }
 
 function AdminReports() { return <AdminReportsScreen/>; }
