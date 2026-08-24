@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Alert, Image, ScrollView, StyleSheet, Text, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
-import { Button, Card, Field, Header, Segmented, ToggleRow, Screen } from "../../components/ui";
+import { Button, Card, Field, Header, Segmented, ToggleRow, Screen, DataRow } from "../../components/ui";
 import { useAuth } from "../../auth/AuthContext";
 import { platformApi } from "../../services/platformApi";
 import { Ionicons } from "../../components/AppIcon";
@@ -10,12 +10,18 @@ import { colors, fonts, radii, spacing } from "../../theme/tokens";
 
 const msg = (e: unknown) => e instanceof Error ? e.message : "Please try again.";
 
+const defaultNotifications = {
+  duePayment: true,
+  overdue: true,
+  paymentReceived: true,
+  smsStatus: true,
+  weeklySummary: true,
+};
+
 export function FinancerSettingsScreen() {
   const { updateUser } = useAuth();
   const [data, setData] = useState<any>(null);
-  
   const [activeTab, setActiveTab] = useState("Profile");
-  
   const [form, setForm] = useState({
     name: "",
     businessName: "",
@@ -56,6 +62,10 @@ export function FinancerSettingsScreen() {
         plan: p.plan ?? "No active plan",
         avatarLetter: (fullName || "U").charAt(0).toUpperCase()
       });
+      setNotifications({
+        ...defaultNotifications,
+        ...(p.notifications ?? {}),
+      });
     } catch (e) {
       Alert.alert("Profile unavailable", msg(e));
     } finally {
@@ -75,9 +85,12 @@ export function FinancerSettingsScreen() {
     if (result.canceled) return;
     const asset = result.assets[0];
     if (!asset) return;
-    if ((asset.size ?? 0) > 2 * 1024 * 1024)
-      return Alert.alert("Image too large", "Profile photo must be 2 MB or smaller.");
-    
+    if ((asset.size ?? 0) > 2 * 1024 * 1024) {
+      return Alert.alert(
+        "Image too large",
+        "Profile photo must be 2 MB or smaller.",
+      );
+    }
     const base64 = await FileSystem.readAsStringAsync(asset.uri, {
       encoding: FileSystem.EncodingType.Base64,
     });
@@ -98,6 +111,7 @@ export function FinancerSettingsScreen() {
         city: form.city,
         state: form.state,
         profileImageDataUrl: form.profileImage || null,
+        notifications,
       });
       updateUser({
         firstName: saved.user?.firstName,
@@ -107,9 +121,9 @@ export function FinancerSettingsScreen() {
         fullName: saved.user?.fullName,
       });
       await load();
-      Alert.alert("Saved", "Details saved successfully.");
+      Alert.alert("Saved", "Settings saved successfully.");
     } catch (e) {
-      Alert.alert("Profile not saved", msg(e));
+      Alert.alert("Settings not saved", msg(e));
     } finally {
       setBusy(false);
     }
@@ -235,36 +249,44 @@ export function FinancerSettingsScreen() {
 
       {/* NOTIFICATIONS TAB */}
       {activeTab === "Notifications" && (
-        <Card>
-          <Text style={s.sectionTitle}>PREFERENCES</Text>
-          <View style={s.toggleList}>
-            <ToggleRow 
-              label="Due payment reminders" 
-              value={notifications.duePayment} 
-              onValueChange={() => handleNotificationChange('duePayment')} 
-            />
-            <ToggleRow 
-              label="Overdue alerts" 
-              value={notifications.overdue} 
-              onValueChange={() => handleNotificationChange('overdue')} 
-            />
-            <ToggleRow 
-              label="Payment received" 
-              value={notifications.paymentReceived} 
-              onValueChange={() => handleNotificationChange('paymentReceived')} 
-            />
-            <ToggleRow 
-              label="SMS delivery status" 
-              value={notifications.smsStatus} 
-              onValueChange={() => handleNotificationChange('smsStatus')} 
-            />
-            <ToggleRow 
-              label="Weekly summary" 
-              value={notifications.weeklySummary} 
-              onValueChange={() => handleNotificationChange('weeklySummary')} 
-            />
-          </View>
-        </Card>
+        <View style={s.gap}>
+          <Card>
+            <Text style={s.sectionTitle}>PREFERENCES</Text>
+            <View style={s.toggleList}>
+              <ToggleRow 
+                label="Due payment reminders" 
+                value={notifications.duePayment} 
+                onValueChange={() => handleNotificationChange('duePayment')} 
+              />
+              <ToggleRow 
+                label="Overdue alerts" 
+                value={notifications.overdue} 
+                onValueChange={() => handleNotificationChange('overdue')} 
+              />
+              <ToggleRow 
+                label="Payment received" 
+                value={notifications.paymentReceived} 
+                onValueChange={() => handleNotificationChange('paymentReceived')} 
+              />
+              <ToggleRow 
+                label="SMS delivery status" 
+                value={notifications.smsStatus} 
+                onValueChange={() => handleNotificationChange('smsStatus')} 
+              />
+              <ToggleRow 
+                label="Weekly summary" 
+                value={notifications.weeklySummary} 
+                onValueChange={() => handleNotificationChange('weeklySummary')} 
+              />
+            </View>
+          </Card>
+          
+          <Button
+            loading={busy}
+            label="Save notification preferences"
+            onPress={() => void save()}
+          />
+        </View>
       )}
       {/* SMS SETTINGS TAB */}
       {activeTab === "SMS Settings" && (

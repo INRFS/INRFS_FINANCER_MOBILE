@@ -74,9 +74,11 @@ export function Card({ children, style }: { children: ReactNode; style?: StylePr
 }
 
 export function IconBubble({ icon, accent = "cyan", size = 44 }: { icon: ComponentProps<typeof Ionicons>["name"]; accent?: Accent; size?: number }) {
+  const backgroundColor = accentSoft[accent] ?? accentSoft.cyan;
+  const foregroundColor = accentColors[accent] ?? accentColors.cyan;
   return (
-    <View style={[styles.iconBubble, { width: size, height: size, borderRadius: size / 3.5, backgroundColor: accentSoft[accent] }]}>
-      <Ionicons name={icon} size={size * 0.48} color={accentColors[accent]} />
+    <View style={[styles.iconBubble, { width: size, height: size, borderRadius: size / 3.5, backgroundColor }]}>
+      <Ionicons name={icon} size={size * 0.48} color={foregroundColor} />
     </View>
   );
 }
@@ -135,9 +137,11 @@ const statusMap: Record<Status, { bg: string; fg: string }> = {
   Open: { bg: colors.cyanSoft, fg: colors.cyan },
 };
 
-export function Badge({ status }: { status: Status }) {
-  const palette = statusMap[status];
-  return <View style={[styles.badge, { backgroundColor: palette.bg }]}><Text style={[styles.badgeText, { color: palette.fg }]}>{status}</Text></View>;
+export function Badge({ status }: { status: Status | string | null | undefined }) {
+  const label = status == null || status === "" ? "Unknown" : String(status);
+  const backgroundColor = statusMap[label as Status]?.bg ?? "#F1F5F9";
+  const foregroundColor = statusMap[label as Status]?.fg ?? colors.muted;
+  return <View style={[styles.badge, { backgroundColor }]}><Text style={[styles.badgeText, { color: foregroundColor }]}>{label}</Text></View>;
 }
 
 export function SectionTitle({ children, action }: { children: ReactNode; action?: ReactNode }) {
@@ -155,7 +159,7 @@ export function ToggleRow({ label, subtitle, value, onValueChange, accent = "cya
   return <View style={styles.toggleRow}><View style={styles.toggleCopy}><Text style={styles.rowTitle}>{label}</Text>{subtitle ? <Text style={styles.rowMeta}>{subtitle}</Text> : null}</View><Switch value={value} onValueChange={onValueChange} trackColor={{ false: colors.border, true: accentColors[accent] }} /></View>;
 }
 
-export function DataRow({ title, subtitle, amount, status, onPress }: { title: string; subtitle?: string; amount?: string; status?: Status; onPress?: () => void }) {
+export function DataRow({ title, subtitle, amount, status, onPress }: { title: string; subtitle?: string; amount?: string; status?: Status | string | null; onPress?: () => void }) {
   const content = <><View style={styles.dataCopy}><Text style={styles.rowTitle}>{title}</Text>{subtitle ? <Text style={styles.rowMeta}>{subtitle}</Text> : null}</View><View style={styles.dataEnd}>{amount ? <Text style={styles.amount}>{amount}</Text> : null}{status ? <Badge status={status} /> : null}{onPress ? <Ionicons name="chevron-forward" size={18} color={colors.subtle} /> : null}</View></>;
   return onPress ? <Pressable onPress={onPress} style={({ pressed }) => [styles.dataRow, pressed && { opacity: 0.7 }]}>{content}</Pressable> : <View style={styles.dataRow}>{content}</View>;
 }
