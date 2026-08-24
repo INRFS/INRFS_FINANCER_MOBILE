@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, FlatList, Share, Text, View } from "react-native";
-import { Button, Card, Field, KpiCard, Grid } from "../../components/ui";
+import { Alert, FlatList, Share, Text, View, Modal, ScrollView, Pressable, StyleSheet, ActivityIndicator } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Button, Card, Field, KpiCard, Grid, Header, Screen } from "../../components/ui";
 import { pageItems, platformApi } from "../../services/platformApi";
-import { RemoteState, useRemote } from "./shared";
 import { s } from "./styles";
 import { Ionicons } from "../../components/AppIcon";
+import { colors, fonts, radii, spacing } from "../../theme/tokens";
 
 const rupees = (v: unknown) => `₹${Number(v ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
@@ -16,30 +17,51 @@ function formatLedgerDate(value: any) {
 }
 
 export function LedgerScreen() {
-  const loader = useCallback(async () => ({ customers: pageItems(await platformApi.customers.all()) }), []);
-  const state = useRemote(loader, { customers: [] } as any);
-  
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(true);
+  const [customersError, setCustomersError] = useState("");
+
   const [selectedId, setSelectedId] = useState("");
   const [ledgerData, setLedgerData] = useState<{ customer: any; entries: any[] }>({ customer: null, entries: [] });
-  const [search, setSearch] = useState("");
   const [ledgerLoading, setLedgerLoading] = useState(false);
   const [ledgerError, setLedgerError] = useState("");
+  
+  const [isCustomerSheetOpen, setIsCustomerSheetOpen] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState("");
 
-  const customersList = state.data.customers ?? [];
+  const loadCustomers = useCallback(async () => {
+    setCustomersLoading(true);
+    setCustomersError("");
+    try {
+      const payload = await platformApi.customers.all();
+      const items = pageItems(payload);
+      setCustomers(items);
+      if (items.length > 0 && !selectedId) {
+        setSelectedId(items[0].id);
+      }
+    } catch (e) {
+      setCustomersError(e instanceof Error ? e.message : "Failed to load customers");
+    } finally {
+      setCustomersLoading(false);
+    }
+  }, [selectedId]);
+
   useEffect(() => {
-    if (!selectedId && customersList[0]?.id) setSelectedId(customersList[0].id);
-  }, [customersList, selectedId]);
+    void loadCustomers();
+  }, [loadCustomers]);
 
   useEffect(() => {
     if (!selectedId) return;
-    const customer = customersList.find((item: any) => item.id === selectedId);
-    setLedgerLoading(true);
-    setLedgerError("");
-    platformApi.customers.ledger(selectedId, { pageSize: 500 })
-      .then((payload: any) => {
+    const loadLedger = async () => {
+      setLedgerLoading(true);
+      setLedgerError("");
+      try {
+        const payload: any = await platformApi.customers.ledger(selectedId, { pageSize: 500 });
         const entries = Array.isArray(payload?.entries) ? payload.entries : pageItems(payload);
+        const customer = customers.find((c) => c.id === selectedId) || payload?.customer;
+        
         setLedgerData({
-          customer: payload?.customer ?? customer,
+          customer,
           entries: entries.map((item: any, index: number) => ({
             id: item.id ?? `ledger-${index}`,
             transactionAt: item.transactionAt ?? item.occurredAt ?? item.date ?? item.transactionDate,
@@ -48,26 +70,32 @@ export function LedgerScreen() {
             debit: Number(item.debit ?? item.debitAmount ?? 0),
             credit: Number(item.credit ?? item.creditAmount ?? 0),
             balance: Number(item.balance ?? item.closingBalance ?? item.runningBalance ?? 0),
-            status: item.status,
           })),
         });
-      })
-      .catch((e) => setLedgerError(e instanceof Error ? e.message : "Ledger error"))
-      .finally(() => setLedgerLoading(false));
-  }, [selectedId, customersList]);
-
+      } catch (e) {
+        setLedgerError(e instanceof Error ? e.message : "Ledger error");
+      } finally {
+        setLedgerLoading(false);
+      }
+    };
+    void loadLedger();
+  }, [selectedId, customers]);
   const filteredCustomers = useMemo(() => {
-    const value = search.trim().toLowerCase();
-    return customersList.filter((item: any) => !value || [item.fullName, item.customerNumber, item.phone].some((field) => String(field || "").toLowerCase().includes(value)));
-  }, [customersList, search]);
+    const value = customerSearch.trim().toLowerCase();
+    return customers.filter((item: any) => !value || [item.fullName, item.customerNumber, item.phone].some((field) => String(field || "").toLowerCase().includes(value)));
+  }, [customers, customerSearch]);
 
-  const totals = useMemo(() => ledgerData.entries.reduce((sum, item) => ({ debit: sum.debit + Number(item.debit || 0), credit: sum.credit + Number(item.credit || 0) }), { debit: 0, credit: 0 }), [ledgerData.entries]);
-  const currentBalance = ledgerData.entries.length ? Number(ledgerData.entries[ledgerData.entries.length - 1].balance || totals.debit - totals.credit) : totals.debit - totals.credit;
+  const totals = useMemo(() => ledgerData.entries.reduce((sum, item) => ({ 
+    debit: sum.debit + Number(item.debit || 0), 
+    credit: sum.credit + Number(item.credit || 0) 
+  }), { debit: 0, credit: 0 }), [ledgerData.entries]);
+  
+  const currentBalance = totals.debit - totals.credit;
 
   const exportCsv = async () => {
     if (!ledgerData.entries.length) return;
     try {
-      const data = [["Date", "Transaction", "Description", "Debit", "Credit", "Balance"], ...ledgerData.entries.map((item) => [item.transactionAt, item.transactionNumber, item.type, item.debit, item.credit, item.balance])];
+      const data = [["Date", "Transaction", "Type", "Debit", "Credit", "Balance"], ...ledgerData.entries.map((item) => [item.transactionAt, item.transactionNumber, item.type, item.debit, item.credit, item.balance])];
       const csv = data.map((row) => row.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`).join(",")).join("\r\n");
       await Share.share({ title: `${ledgerData.customer?.customerNumber || "customer"}-ledger.csv`, message: csv });
     } catch (e) {
@@ -75,66 +103,271 @@ export function LedgerScreen() {
     }
   };
 
+  const selectedCustomer = ledgerData.customer || customers.find(c => c.id === selectedId);
+
   return (
-    <View style={s.gap}>
-      <Field label="Search Customers" value={search} onChangeText={setSearch} placeholder="Name, ID or phone" />
-      <RemoteState {...state} retry={() => void state.refresh()} />
-      
-      {filteredCustomers.length > 0 && (
-        <View style={{ maxHeight: 150 }}>
-          <FlatList 
-            data={filteredCustomers}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            keyExtractor={x => x.id}
-            renderItem={({ item: x }) => (
-              <Button 
-                variant={selectedId === x.id ? "primary" : "secondary"} 
-                label={x.fullName} 
-                onPress={() => setSelectedId(x.id)} 
-                style={{ marginRight: 8 }} 
-              />
+    <Screen>
+      <Header 
+        title="Customer Ledger" 
+        subtitle="View customer transactions and balance" 
+        action={
+          <Pressable 
+            onPress={exportCsv} 
+            disabled={!ledgerData.entries.length || ledgerLoading} 
+            style={({ pressed }) => [styles.exportBtn, pressed && { opacity: 0.7 }, (!ledgerData.entries.length || ledgerLoading) && { opacity: 0.5 }]}
+          >
+            <Ionicons name="download-outline" size={20} color={colors.cyan} />
+          </Pressable>
+        } 
+      />
+
+      {customersLoading ? (
+        <Card style={styles.skeletonCard}><ActivityIndicator color={colors.cyan} /></Card>
+      ) : customersError ? (
+        <Card style={styles.errorCard}>
+          <Text style={s.error}>{customersError}</Text>
+          <Button label="Retry" variant="secondary" onPress={loadCustomers} style={{ marginTop: 10 }} />
+        </Card>
+      ) : (
+        <Pressable onPress={() => setIsCustomerSheetOpen(true)}>
+          <Card style={styles.customerSelector}>
+            <Text style={styles.sectionTitle}>CUSTOMER</Text>
+            {selectedCustomer ? (
+              <View style={[s.row, { marginTop: 8 }]}>
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>{String(selectedCustomer.fullName?.charAt(0) || "?").toUpperCase()}</Text>
+                </View>
+                <View style={s.flex}>
+                  <Text style={s.title}>{selectedCustomer.fullName}</Text>
+                  <Text style={s.meta}>{selectedCustomer.customerNumber} · {selectedCustomer.phone}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+              </View>
+            ) : (
+              <Text style={[s.muted, { marginTop: 8 }]}>Tap to select customer...</Text>
             )}
-          />
-        </View>
+          </Card>
+        </Pressable>
       )}
 
-      {ledgerData.customer && (
+      {selectedId && !customersLoading && (
         <>
-          <Grid>
-            <KpiCard label="Total Disbursed" value={rupees(totals.debit)} accent="cyan"/>
-            <KpiCard label="Total Received" value={rupees(totals.credit)} accent="green"/>
-            <KpiCard label="Current Balance" value={rupees(currentBalance)} accent="orange"/>
-          </Grid>
-          
-          <Card>
-            <View style={s.between}>
-              <Text style={s.title}>Ledger Entries</Text>
-              <Button label="Export CSV" icon="download-outline" variant="secondary" onPress={() => void exportCsv()} disabled={!ledgerData.entries.length}/>
-            </View>
+          <View style={{ marginTop: spacing.md }}>
+            <Card style={styles.balanceCard}>
+              <Text style={styles.balanceLabel}>CURRENT BALANCE</Text>
+              <Text style={styles.balanceValue}>{rupees(currentBalance)}</Text>
+              <Text style={styles.balanceSub}>Outstanding amount</Text>
+            </Card>
             
-            {ledgerError ? <Text style={s.error}>{ledgerError}</Text> : null}
-            {ledgerLoading ? <Text style={s.muted}>Loading ledger…</Text> : null}
-            
-            {!ledgerLoading && !ledgerError && ledgerData.entries.map((item, i) => (
-              <View key={item.id ?? i} style={s.ledgerEntry}>
-                <View style={s.between}>
-                  <View style={s.flex}>
-                    <Text style={s.title}>{formatLedgerDate(item.transactionAt)}</Text>
-                    <Text style={s.meta}>{item.transactionNumber}</Text>
-                  </View>
-                  <Text style={s.balance}>{rupees(item.balance)}</Text>
-                </View>
-                <Text style={s.meta}>{item.type}</Text>
-                <View style={s.between}>
-                  <Text style={s.debit}>Debit: {item.debit ? rupees(item.debit) : "—"}</Text>
-                  <Text style={s.credit}>Credit: {item.credit ? rupees(item.credit) : "—"}</Text>
-                </View>
+            <View style={[s.row, { marginTop: 10 }]}>
+              <View style={[styles.kpiWrapper, { marginRight: 5 }]}>
+                <KpiCard label="Disbursed" value={rupees(totals.debit)} accent="cyan" />
               </View>
-            ))}
-          </Card>
+              <View style={[styles.kpiWrapper, { marginLeft: 5 }]}>
+                <KpiCard label="Received" value={rupees(totals.credit)} accent="green" />
+              </View>
+            </View>
+          </View>
+          <Text style={[styles.sectionTitle, { marginTop: spacing.lg, marginBottom: spacing.sm }]}>TRANSACTIONS</Text>
+          
+          {ledgerError ? (
+            <Card style={styles.errorCard}>
+              <Text style={s.error}>{ledgerError}</Text>
+            </Card>
+          ) : ledgerLoading ? (
+            <View style={{ alignItems: 'center', padding: 40 }}>
+              <ActivityIndicator color={colors.cyan} />
+              <Text style={[s.muted, { marginTop: 10 }]}>Loading transactions...</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={ledgerData.entries}
+              keyExtractor={item => item.id}
+              contentContainerStyle={{ paddingBottom: 80, gap: 12 }}
+              ListEmptyComponent={
+                <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                  <Ionicons name="document-text-outline" size={48} color={colors.subtle} />
+                  <Text style={{ fontFamily: fonts.bold, fontSize: 16, color: colors.dark, marginTop: 15 }}>No transactions yet</Text>
+                  <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.muted, marginTop: 5 }}>This customer does not have any ledger transactions.</Text>
+                </View>
+              }
+              renderItem={({ item }) => (
+                <Card>
+                  <View style={s.between}>
+                    <Text style={s.title}>{item.type}</Text>
+                    <Text style={[s.meta, { color: colors.dark }]}>{formatLedgerDate(item.transactionAt)}</Text>
+                  </View>
+                  <Text style={[s.meta, { marginTop: 4, marginBottom: 12 }]}>{item.transactionNumber}</Text>
+                  
+                  <View style={[s.row, { borderTopWidth: 1, borderColor: colors.border, paddingTop: 12, paddingBottom: 12 }]}>
+                    <View style={s.flex}>
+                      <Text style={styles.amtLabel}>Debit</Text>
+                      <Text style={[styles.amtValue, { color: colors.error }]}>{item.debit ? rupees(item.debit) : "—"}</Text>
+                    </View>
+                    <View style={s.flex}>
+                      <Text style={styles.amtLabel}>Credit</Text>
+                      <Text style={[styles.amtValue, { color: colors.green }]}>{item.credit ? rupees(item.credit) : "—"}</Text>
+                    </View>
+                  </View>
+                  
+                  <View style={[s.between, { borderTopWidth: 1, borderColor: colors.border, paddingTop: 12 }]}>
+                    <Text style={[styles.amtLabel, { color: colors.dark, fontSize: 13 }]}>Balance</Text>
+                    <Text style={[styles.amtValue, { color: colors.dark, fontSize: 15 }]}>{rupees(item.balance)}</Text>
+                  </View>
+                </Card>
+              )}
+            />
+          )}
         </>
       )}
-    </View>
+
+      <Modal visible={isCustomerSheetOpen} transparent animationType="slide" onRequestClose={() => setIsCustomerSheetOpen(false)}>
+        <View style={s.overlay}>
+          <SafeAreaView edges={["bottom", "top"]} style={s.sheet}>
+            <View style={s.between}>
+              <Text style={s.sheetTitle}>Select Customer</Text>
+              <Pressable onPress={() => setIsCustomerSheetOpen(false)} style={{ padding: 5 }}><Ionicons name="close" size={25} /></Pressable>
+            </View>
+            
+            <View style={{ padding: 20, paddingBottom: 10 }}>
+              <View style={styles.searchBox}>
+                <Ionicons name="search" size={18} color={colors.muted} />
+                <Field 
+                  label="" 
+                  value={customerSearch} 
+                  onChangeText={setCustomerSearch} 
+                  placeholder="Search customers..." 
+                  style={{ flex: 1, marginTop: -7, marginBottom: -7, borderBottomWidth: 0, backgroundColor: 'transparent' }} 
+                />
+              </View>
+            </View>
+            
+            <FlatList 
+              data={filteredCustomers}
+              keyExtractor={c => c.id}
+              contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}
+              renderItem={({ item }) => (
+                <Pressable 
+                  style={({ pressed }) => [styles.sheetRow, pressed && { backgroundColor: colors.background }, selectedId === item.id && { backgroundColor: '#f0f9ff' }]}
+                  onPress={() => {
+                    if (selectedId !== item.id) {
+                      setLedgerData({ customer: item, entries: [] }); 
+                      setSelectedId(item.id);
+                    }
+                    setIsCustomerSheetOpen(false);
+                  }}
+                >
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>{String(item.fullName?.charAt(0) || "?").toUpperCase()}</Text>
+                  </View>
+                  <View style={s.flex}>
+                    <Text style={[s.title, selectedId === item.id && { color: colors.cyan }]}>{item.fullName}</Text>
+                    <Text style={s.meta}>{item.customerNumber} · {item.phone}</Text>
+                  </View>
+                  {selectedId === item.id && <Ionicons name="checkmark-done-outline" size={20} color={colors.cyan} />}
+                </Pressable>
+              )}
+              ListEmptyComponent={<Text style={[s.muted, { textAlign: 'center', marginTop: 20 }]}>No customers found</Text>}
+            />
+          </SafeAreaView>
+        </View>
+      </Modal>
+
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  exportBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: radii.pill,
+    backgroundColor: '#e0f2fe',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionTitle: {
+    fontFamily: fonts.semibold,
+    fontSize: 11,
+    color: colors.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  skeletonCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 80,
+  },
+  errorCard: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#fecaca',
+  },
+  customerSelector: {
+    paddingVertical: 14,
+  },
+  avatar: {
+    width: 38,
+    height: 38,
+    borderRadius: radii.pill,
+    backgroundColor: colors.cyanSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  avatarText: {
+    fontFamily: fonts.bold,
+    fontSize: 16,
+    color: colors.cyan,
+  },
+  balanceCard: {
+    backgroundColor: colors.dark,
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  balanceLabel: {
+    fontFamily: fonts.semibold,
+    fontSize: 11,
+    color: '#94a3b8',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  balanceValue: {
+    fontFamily: fonts.extrabold,
+    fontSize: 28,
+    color: '#fff',
+    letterSpacing: -0.5,
+  },
+  balanceSub: {
+    fontFamily: fonts.medium,
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 6,
+  },
+  kpiWrapper: {
+    flex: 1,
+  },
+  amtLabel: {
+    fontFamily: fonts.medium,
+    fontSize: 12,
+    color: colors.muted,
+  },
+  amtValue: {
+    fontFamily: fonts.bold,
+    fontSize: 14,
+    marginTop: 4,
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f1f5f9',
+    borderRadius: radii.md,
+    paddingHorizontal: 12,
+  },
+  sheetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  }
+});
