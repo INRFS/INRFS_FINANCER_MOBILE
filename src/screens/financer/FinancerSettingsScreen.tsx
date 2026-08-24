@@ -1,20 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
-import { Alert, Image, ScrollView, Text, View } from "react-native";
+import React, { useCallback, useEffect, useState } from "react";
+import { Alert, Image, ScrollView, StyleSheet, Text, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
-import {
-  Button,
-  Card,
-  DataRow,
-  Field,
-  Segmented,
-  ToggleRow,
-} from "../../components/ui";
+import { Button, Card, Field, Header, Segmented, ToggleRow, Screen, DataRow } from "../../components/ui";
 import { useAuth } from "../../auth/AuthContext";
 import { platformApi } from "../../services/platformApi";
+import { Ionicons } from "../../components/AppIcon";
+import { colors, fonts, radii, spacing } from "../../theme/tokens";
 
-const msg = (e: unknown) =>
-  e instanceof Error ? e.message : "Please try again.";
+const msg = (e: unknown) => e instanceof Error ? e.message : "Please try again.";
 
 const defaultNotifications = {
   duePayment: true,
@@ -27,8 +21,7 @@ const defaultNotifications = {
 export function FinancerSettingsScreen() {
   const { updateUser } = useAuth();
   const [data, setData] = useState<any>(null);
-  const [tab, setTab] = useState("Profile");
-  const [notifications, setNotifications] = useState(defaultNotifications);
+  const [activeTab, setActiveTab] = useState("Profile");
   const [form, setForm] = useState({
     name: "",
     businessName: "",
@@ -38,16 +31,26 @@ export function FinancerSettingsScreen() {
     state: "",
     profileImage: "",
     plan: "",
+    avatarLetter: "U"
   });
+
+  const [notifications, setNotifications] = useState({
+    duePayment: true,
+    overdue: true,
+    paymentReceived: true,
+    smsStatus: true,
+    weeklySummary: true,
+  });
+
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
+    setLoading(true);
     try {
       const p = await platformApi.profile.get();
       setData(p);
-      const fullName =
-        p.user?.fullName ??
-        [p.user?.firstName, p.user?.lastName].filter(Boolean).join(" ");
+      const fullName = p.user?.fullName ?? [p.user?.firstName, p.user?.lastName].filter(Boolean).join(" ");
       setForm({
         name: fullName ?? "",
         businessName: p.financer?.displayName ?? "",
@@ -57,6 +60,7 @@ export function FinancerSettingsScreen() {
         state: p.financer?.state ?? "",
         profileImage: p.profileImage ?? "",
         plan: p.plan ?? "No active plan",
+        avatarLetter: (fullName || "U").charAt(0).toUpperCase()
       });
       setNotifications({
         ...defaultNotifications,
@@ -64,6 +68,8 @@ export function FinancerSettingsScreen() {
       });
     } catch (e) {
       Alert.alert("Profile unavailable", msg(e));
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -123,50 +129,318 @@ export function FinancerSettingsScreen() {
     }
   };
 
-  const toggle = (key: keyof typeof notifications) => (value: boolean) =>
-    setNotifications((current) => ({ ...current, [key]: value }));
-
+  const handleNotificationChange = (key: keyof typeof notifications) => {
+    setNotifications((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
   return (
-    <ScrollView contentContainerStyle={{ gap: 14, paddingBottom: 80 }}>
-      <Segmented
-        options={["Profile", "Notifications"]}
-        value={tab}
-        onChange={setTab}
+    <Screen>
+      <Header 
+        title="Settings" 
+        subtitle="Manage your account and preferences" 
       />
-      {tab === "Notifications" ? (
-        <Card>
-          <ToggleRow label="Due payment reminders" value={notifications.duePayment} onValueChange={toggle("duePayment")} />
-          <ToggleRow label="Overdue alerts" value={notifications.overdue} onValueChange={toggle("overdue")} />
-          <ToggleRow label="Payment received" value={notifications.paymentReceived} onValueChange={toggle("paymentReceived")} />
-          <ToggleRow label="SMS status" value={notifications.smsStatus} onValueChange={toggle("smsStatus")} />
-          <ToggleRow label="Weekly summary" value={notifications.weeklySummary} onValueChange={toggle("weeklySummary")} />
-          <Button loading={busy} label="Save notification preferences" onPress={() => void save()} />
+      
+      <View style={{ marginBottom: spacing.xl }}>
+        <Segmented 
+          options={["Profile", "Notifications", "SMS Settings", "Security"]} 
+          value={activeTab} 
+          onChange={setActiveTab} 
+        />
+      </View>
+
+      {!data && loading ? (
+        <Card style={{ padding: 40, alignItems: 'center' }}>
+          <Text style={{ color: colors.muted, fontFamily: fonts.medium }}>Loading profile...</Text>
         </Card>
-      ) : (
-        <>
-          {form.profileImage ? (
-            <Image source={{ uri: form.profileImage }} style={{ width: 96, height: 96, borderRadius: 48, alignSelf: "center" }} />
-          ) : null}
-          <DataRow title="Subscription plan" amount={form.plan} />
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <Button label={form.profileImage ? "Change photo" : "Add photo"} variant="secondary" onPress={() => void pickPhoto()} />
-            {form.profileImage ? (
-              <Button label="Remove photo" variant="danger" onPress={() => setForm({ ...form, profileImage: "" })} />
-            ) : null}
-          </View>
+      ) : null}
+
+      {/* PROFILE TAB */}
+      {activeTab === "Profile" && data && (
+        <View style={s.gap}>
           <Card>
-            <Text style={{ fontSize: 16, fontWeight: "600", marginBottom: 8, color: "#fff" }}>Profile Details</Text>
-            <Field label="Full name" value={form.name} onChangeText={(name) => setForm({ ...form, name })} />
-            <Field label="Business name" value={form.businessName} onChangeText={(businessName) => setForm({ ...form, businessName })} />
-            <Field label="Mobile" value={form.mobile} onChangeText={(mobile) => setForm({ ...form, mobile })} />
-            <Field label="Email" value={form.email} onChangeText={(email) => setForm({ ...form, email })} keyboardType="email-address" />
-            <Field label="City" value={form.city} onChangeText={(city) => setForm({ ...form, city })} />
-            <Field label="State" value={form.state} onChangeText={(state) => setForm({ ...form, state })} />
-            <Button loading={busy} label="Save changes" onPress={() => void save()} />
+            <View style={s.profileTop}>
+              <View style={s.avatarContainer}>
+                {form.profileImage ? (
+                  <Image source={{ uri: form.profileImage }} style={s.avatarImage} />
+                ) : (
+                  <View style={s.avatarPlaceholder}>
+                    <Text style={s.avatarText}>{form.avatarLetter}</Text>
+                  </View>
+                )}
+              </View>
+              
+              <View style={s.profileIdentity}>
+                <Text style={s.nameText}>{form.name}</Text>
+                <Text style={s.planBadge}>{form.plan}</Text>
+              </View>
+            </View>
+
+            <View style={s.photoActions}>
+              <Button
+                label={form.profileImage ? "Change photo" : "Add photo"}
+                variant="secondary"
+                icon="cloud-upload-outline"
+                style={{ flex: 1 }}
+                onPress={() => void pickPhoto()}
+              />
+              {form.profileImage ? (
+                <Button
+                  label="Remove"
+                  variant="danger"
+                  icon="close"
+                  style={{ flex: 1 }}
+                  onPress={() => setForm({ ...form, profileImage: "" })}
+                />
+              ) : null}
+            </View>
           </Card>
-        </>
+
+          <Card>
+            <Text style={s.sectionTitle}>PERSONAL INFORMATION</Text>
+            
+            <View style={s.formGrid}>
+              <Field
+                label="Full Name"
+                value={form.name}
+                onChangeText={(v) => setForm({ ...form, name: v })}
+              />
+              <Field
+                label="Business Name"
+                value={form.businessName}
+                onChangeText={(v) => setForm({ ...form, businessName: v })}
+              />
+              <Field
+                label="Mobile"
+                value={form.mobile}
+                onChangeText={(v) => setForm({ ...form, mobile: v })}
+                keyboardType="phone-pad"
+              />
+              <Field
+                label="Email"
+                value={form.email}
+                onChangeText={(v) => setForm({ ...form, email: v })}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+              <Field
+                label="City"
+                value={form.city}
+                onChangeText={(v) => setForm({ ...form, city: v })}
+              />
+              <Field
+                label="State"
+                value={form.state}
+                onChangeText={(v) => setForm({ ...form, state: v })}
+              />
+            </View>
+
+            <View style={{ marginTop: 24 }}>
+              <Button
+                loading={busy}
+                label="Save Changes"
+                onPress={() => void save()}
+              />
+            </View>
+          </Card>
+        </View>
       )}
-      {!data ? <Text style={{ color: "#fff" }}>Loading profile…</Text> : null}
-    </ScrollView>
+
+      {/* NOTIFICATIONS TAB */}
+      {activeTab === "Notifications" && (
+        <View style={s.gap}>
+          <Card>
+            <Text style={s.sectionTitle}>PREFERENCES</Text>
+            <View style={s.toggleList}>
+              <ToggleRow 
+                label="Due payment reminders" 
+                value={notifications.duePayment} 
+                onValueChange={() => handleNotificationChange('duePayment')} 
+              />
+              <ToggleRow 
+                label="Overdue alerts" 
+                value={notifications.overdue} 
+                onValueChange={() => handleNotificationChange('overdue')} 
+              />
+              <ToggleRow 
+                label="Payment received" 
+                value={notifications.paymentReceived} 
+                onValueChange={() => handleNotificationChange('paymentReceived')} 
+              />
+              <ToggleRow 
+                label="SMS delivery status" 
+                value={notifications.smsStatus} 
+                onValueChange={() => handleNotificationChange('smsStatus')} 
+              />
+              <ToggleRow 
+                label="Weekly summary" 
+                value={notifications.weeklySummary} 
+                onValueChange={() => handleNotificationChange('weeklySummary')} 
+              />
+            </View>
+          </Card>
+          
+          <Button
+            loading={busy}
+            label="Save notification preferences"
+            onPress={() => void save()}
+          />
+        </View>
+      )}
+      {/* SMS SETTINGS TAB */}
+      {activeTab === "SMS Settings" && (
+        <View style={s.gap}>
+          <Card style={s.creditBox}>
+            <Text style={s.creditLabel}>SMS Credits Remaining</Text>
+            <Text style={s.creditNumber}>760 credits</Text>
+            <Text style={s.creditPlan}>Premium Plan · 2,000/month</Text>
+          </Card>
+          
+          <Card>
+            <Field 
+              label="Sender ID" 
+              value="INRFS" 
+              editable={false} 
+              style={{ marginBottom: 16 }} 
+            />
+            <Field 
+              label="Default SMS Template" 
+              value="Dear {name}, your interest payment of ₹{amount} is due on {date}. - INRFS" 
+              editable={true} 
+              multiline 
+            />
+          </Card>
+        </View>
+      )}
+
+      {/* SECURITY TAB */}
+      {activeTab === "Security" && (
+        <Card>
+          <Text style={s.sectionTitle}>SECURITY</Text>
+          <Text style={s.securityDesc}>
+            Your account uses Mobile OTP authentication. No password is required.
+          </Text>
+          
+          <View style={s.securityStatusBox}>
+            <Ionicons name="shield-checkmark" size={24} color="#08743b" />
+            <Text style={s.securityStatusText}>OTP-secured account</Text>
+          </View>
+        </Card>
+      )}
+
+    </Screen>
   );
 }
+
+const s = StyleSheet.create({
+  gap: {
+    gap: spacing.xl,
+  },
+  sectionTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 12,
+    color: colors.muted,
+    letterSpacing: 0.5,
+    marginBottom: 16,
+  },
+  profileTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 20,
+  },
+  avatarContainer: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    overflow: 'hidden',
+    backgroundColor: '#0aaee8',
+    elevation: 2,
+    shadowColor: '#173B62',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontFamily: fonts.bold,
+    fontSize: 28,
+    color: colors.white,
+  },
+  profileIdentity: {
+    flex: 1,
+  },
+  nameText: {
+    fontFamily: fonts.bold,
+    fontSize: 20,
+    color: colors.dark,
+    marginBottom: 4,
+  },
+  planBadge: {
+    fontFamily: fonts.medium,
+    fontSize: 14,
+    color: colors.muted,
+  },
+  photoActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  formGrid: {
+    gap: 16,
+  },
+  toggleList: {
+    marginTop: 8,
+  },
+  creditBox: {
+    backgroundColor: '#dff6fc',
+    borderColor: '#bcebf7',
+    alignItems: 'flex-start',
+    padding: 24,
+  },
+  creditLabel: {
+    fontFamily: fonts.semibold,
+    fontSize: 14,
+    color: '#0788c2',
+    marginBottom: 4,
+  },
+  creditNumber: {
+    fontFamily: fonts.extrabold,
+    fontSize: 32,
+    color: '#0874b7',
+    marginBottom: 6,
+  },
+  creditPlan: {
+    fontFamily: fonts.medium,
+    fontSize: 14,
+    color: '#0874b7',
+  },
+  securityDesc: {
+    fontFamily: fonts.regular,
+    fontSize: 15,
+    color: colors.muted,
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  securityStatusBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#d9fbe5',
+    padding: 16,
+    borderRadius: radii.md,
+  },
+  securityStatusText: {
+    fontFamily: fonts.bold,
+    fontSize: 16,
+    color: '#08743b',
+  }
+});
