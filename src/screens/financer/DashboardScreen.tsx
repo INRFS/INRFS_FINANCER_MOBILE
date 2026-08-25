@@ -1,6 +1,5 @@
 import React, { useCallback, useState } from "react";
 import { View, Text, StyleSheet, Modal, ScrollView, RefreshControl, Dimensions, Pressable, Platform, KeyboardAvoidingView } from "react-native";
-import { useNavigation } from "@react-navigation/native";
 import { Button, Card, Badge, Field, Segmented } from "../../components/ui";
 import { platformApi } from "../../services/platformApi";
 import { useAuth } from "../../auth/AuthContext";
@@ -100,8 +99,6 @@ function BarChart({ data }: { data: { month: string; collected: number }[] }) {
 
 export function DashboardScreen() {
   const { user } = useAuth();
-  const navigation = useNavigation<any>();
-  
   const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Financer';
   const load = useCallback(() => platformApi.dashboard.financer(), []); 
   const state = useRemote(load, {
@@ -183,7 +180,7 @@ export function DashboardScreen() {
           <View style={styles.headerTop}>
             <View>
               <Text style={styles.welcomeText}>Welcome, {displayName}</Text>
-              <Text style={styles.subtitleText}>Here's your loan and customer overview for today.</Text>
+              <Text style={styles.subtitleText}>Here&apos;s your loan and customer overview for today.</Text>
             </View>
           </View>
           <View style={styles.dateBadge}>
@@ -197,7 +194,7 @@ export function DashboardScreen() {
         {!state.loading || d.totalCustomers ? (
           <>
             <View style={styles.statsGrid}>
-              <View style={styles.statCard}>
+              <View style={[styles.statCard, styles.statCardDark]}>
                 <View style={[styles.statIcon, { backgroundColor: "rgba(7, 29, 67, 0.08)" }]}>
                    <Ionicons name="people-outline" size={20} color={colors.dark} />
                 </View>
@@ -207,7 +204,7 @@ export function DashboardScreen() {
                 </View>
               </View>
 
-              <View style={styles.statCard}>
+              <View style={[styles.statCard, styles.statCardCyan]}>
                 <View style={[styles.statIcon, { backgroundColor: "rgba(16, 175, 233, 0.12)" }]}>
                    <Ionicons name="cash-outline" size={20} color={colors.cyan} />
                 </View>
@@ -217,7 +214,7 @@ export function DashboardScreen() {
                 </View>
               </View>
 
-              <View style={styles.statCard}>
+              <View style={[styles.statCard, styles.statCardPurple]}>
                 <View style={[styles.statIcon, { backgroundColor: "rgba(125, 31, 232, 0.12)" }]}>
                    <Ionicons name="trending-up-outline" size={20} color={colors.purple} />
                 </View>
@@ -227,7 +224,7 @@ export function DashboardScreen() {
                 </View>
               </View>
 
-              <View style={styles.statCard}>
+              <View style={[styles.statCard, styles.statCardNavy]}>
                 <View style={[styles.statIcon, { backgroundColor: "rgba(7, 29, 67, 0.15)" }]}>
                    <Ionicons name="card-outline" size={20} color={colors.dark} />
                 </View>
@@ -267,9 +264,9 @@ export function DashboardScreen() {
                       <View style={styles.paymentHeader}>
                         <View>
                           <Text style={styles.paymentCustomer}>{row.customer}</Text>
-                          <Text style={styles.paymentLoanId}>{row.loanId}</Text>
+                          <Text style={styles.paymentLoanId}>{row.loanNumber ?? row.displayId ?? row.loanId}</Text>
                         </View>
-                        <Badge status={row.status as any} />
+                        <Badge status={(row.status || (String(row.dueDate).slice(0, 10) <= new Date().toISOString().slice(0, 10) ? "Due" : "Upcoming")) as any} />
                       </View>
                       
                       <View style={styles.paymentDetails}>
@@ -393,16 +390,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     ...shadows.card,
-    gap: 12
+    gap: 14
   },
   headerTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
-  welcomeText: { color: colors.dark, fontFamily: fonts.extrabold, fontSize: 20 },
+  welcomeText: { color: colors.dark, fontFamily: fonts.extrabold, fontSize: 22 },
   subtitleText: { color: colors.muted, fontFamily: fonts.medium, fontSize: 13, marginTop: 4 },
   dateBadge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.background, paddingHorizontal: 12, paddingVertical: 6, borderRadius: radii.pill, alignSelf: "flex-start", borderWidth: 1, borderColor: colors.border },
   dateText: { color: colors.dark, fontFamily: fonts.semibold, fontSize: 12 },
 
   statsGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md, justifyContent: "space-between" },
-  statCard: { width: "47.5%", backgroundColor: colors.white, padding: 16, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, ...shadows.card, gap: 12 },
+  statCard: { width: "47.5%", minHeight: 126, backgroundColor: colors.white, padding: 16, borderRadius: radii.md, borderWidth: 1, borderTopWidth: 3, borderColor: colors.border, ...shadows.card, gap: 12 },
+  statCardDark: { borderTopColor: colors.dark },
+  statCardCyan: { borderTopColor: colors.cyan },
+  statCardPurple: { borderTopColor: colors.purple },
+  statCardNavy: { borderTopColor: "#52647A" },
   statIcon: { width: 38, height: 38, borderRadius: radii.md, alignItems: "center", justifyContent: "center" },
   statContent: { gap: 4 },
   statLabel: { color: colors.muted, fontFamily: fonts.bold, fontSize: 10, letterSpacing: 0.5 },

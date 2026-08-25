@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import { Alert, FlatList, Pressable, ScrollView, Text, View, Modal, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button, Card, DataRow, Field, Header, Screen, Segmented, KpiCard, Grid, Badge } from "../../components/ui";
@@ -44,14 +45,31 @@ export function LoansScreen() {
       platformApi.customers.all(), 
       platformApi.loans.products()
     ]);
-    return { loans: pageItems(loans), customers: pageItems(customers), products: pageItems(products) };
+    const customerItems = pageItems(customers);
+    const customerById = new Map(customerItems.map((customer: any) => [customer.id, customer]));
+    const loanItems = pageItems(loans).map((loan: any) => {
+      const customer: any = customerById.get(loan.customerId);
+      return {
+        ...loan,
+        customerName: customer?.fullName ?? loan.customerName ?? loan.customerId,
+        type: loan.repaymentFrequency ?? loan.type ?? loan.collectionType ?? 'Monthly',
+        interestRate: Number(loan.interestRate ?? loan.annualInterestRate ?? 0),
+        outstanding: Number(loan.principalOutstanding ?? 0) + Number(loan.interestOutstanding ?? 0) + Number(loan.feesOutstanding ?? 0),
+        dateGiven: loan.disbursementDate ?? loan.startDate,
+      };
+    });
+    return { loans: loanItems, customers: customerItems, products: pageItems(products) };
   }, []);
   
   const state = useRemote(load, { loans: [], customers: [], products: [] } as any);
+  const refreshLoans = state.refresh;
+  useFocusEffect(useCallback(() => {
+    void refreshLoans();
+  }, [refreshLoans]));
   
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
-  const [typeFilter, setTypeFilter] = useState("All Types");
+  const [typeFilter, setTypeFilter] = useState("All");
   
   const [isAdding, setIsAdding] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<any>(null);
@@ -61,7 +79,7 @@ export function LoansScreen() {
       const matchSearch = `${x.loanNumber} ${x.customerName ?? x.customerId}`.toLowerCase().includes(search.toLowerCase());
       const matchStatus = statusFilter === "All" || x.status === statusFilter;
       const xType = x.type || x.collectionType || "";
-      const matchType = typeFilter === "All Types" || xType === typeFilter;
+      const matchType = typeFilter === "All" || xType === typeFilter;
       return matchSearch && matchStatus && matchType;
     });
   }, [state.data.loans, search, statusFilter, typeFilter]);
@@ -71,36 +89,38 @@ export function LoansScreen() {
   const overdueLoansCount = state.data.loans.filter((x: any) => x.status === "Overdue").length;
 
   return (
-    <Screen>
-      <Header 
-        title="Loans" 
-        subtitle="Manage and track all loan accounts." 
-        action={<Button label="New Loan" icon="add" onPress={() => setIsAdding(true)}/>}
-      />
-
-      <Grid>
-        <KpiCard label="Total Loans" value={String(state.data.loans.length)} icon="cash-outline" accent="cyan" />
-        <KpiCard label="Active Loans" value={String(activeLoansCount)} icon="checkmark-circle" accent="green" />
-        <KpiCard label="Closed Loans" value={String(closedLoansCount)} icon="time-outline" accent="cyan" />
-        <KpiCard label="Overdue Loans" value={String(overdueLoansCount)} icon="warning-outline" accent="error" />
-      </Grid>
-
-      <View style={s.gap}>
-        <Field label="Search" value={search} onChangeText={setSearch} placeholder="Search loan ID or customer..."/>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20, paddingHorizontal: 20 }}>
-          <View style={{ flexDirection: "row", gap: 8, paddingRight: 40 }}>
-            <Segmented options={["All", "Active", "Due", "Overdue", "Closed"]} value={statusFilter} onChange={setStatusFilter}/>
-            <Segmented options={["All Types", "Daily Collection", "Weekly Collection", "Monthly Interest"]} value={typeFilter} onChange={setTypeFilter}/>
-          </View>
-        </ScrollView>
-      </View>
-      
-      <RemoteState {...state} retry={() => void state.refresh()}/>
-      
+    <Screen scroll={false} contentStyle={{ paddingBottom: 0 }}>
       <FlatList
+        style={{ flex: 1 }}
         data={rows}
         keyExtractor={x => x.id}
-        contentContainerStyle={{ paddingBottom: 80, gap: 14, paddingTop: 14 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 80, gap: 14 }}
+        ListHeaderComponent={
+          <View style={s.gap}>
+            <Header
+              title="Loans"
+              subtitle="Manage and track all loan accounts."
+              action={<Button label="New Loan" icon="add" onPress={() => setIsAdding(true)}/>}
+            />
+            <Grid>
+              <KpiCard label="Total Loans" value={String(state.data.loans.length)} icon="cash-outline" accent="cyan" />
+              <KpiCard label="Active Loans" value={String(activeLoansCount)} icon="checkmark-circle" accent="green" />
+              <KpiCard label="Closed Loans" value={String(closedLoansCount)} icon="time-outline" accent="cyan" />
+              <KpiCard label="Overdue Loans" value={String(overdueLoansCount)} icon="warning-outline" accent="error" />
+            </Grid>
+            <Field label="Search" value={search} onChangeText={setSearch} placeholder="Search loan ID or customer..."/>
+            <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20, paddingHorizontal: 20 }}>
+              <View style={{ flexDirection: "row", gap: 8, paddingRight: 40 }}>
+                <Segmented options={["All", "Active", "Due", "Overdue", "Closed"]} value={statusFilter} onChange={setStatusFilter}/>
+                <Segmented options={["All", "Daily Collection", "Weekly Collection", "Monthly Interest"]} value={typeFilter} onChange={setTypeFilter}/>
+              </View>
+            </ScrollView>
+            <RemoteState {...state} retry={() => void state.refresh()}/>
+          </View>
+        }
+        ListEmptyComponent={!state.loading ? <Text style={[s.meta, { textAlign: "center", paddingVertical: 32 }]}>No loans match the selected filters.</Text> : null}
         renderItem={({ item: x }) => (
           <Card>
             <View style={s.between}>
@@ -121,7 +141,7 @@ export function LoansScreen() {
               </View>
               <View style={{ alignItems: 'flex-end' }}>
                 <Text style={s.meta}>Outstanding</Text>
-                <Text style={[s.balance, { color: colors.cyan }]}>{rupees(x.principalOutstanding ?? x.principal)}</Text>
+                <Text style={[s.balance, { color: colors.cyan }]}>{rupees(x.outstanding)}</Text>
               </View>
             </View>
 
@@ -155,7 +175,7 @@ export function LoansScreen() {
               <Card>
                 <Text style={s.label}>Loan Summary</Text>
                 <DataRow title="Principal Amount" amount={rupees(selectedLoan.principal)} />
-                <DataRow title="Outstanding Balance" amount={rupees(selectedLoan.principalOutstanding ?? selectedLoan.principal)} />
+                <DataRow title="Outstanding Balance" amount={rupees(selectedLoan.outstanding)} />
                 <DataRow title="Interest Scheme" amount={`${selectedLoan.interestRate}%`} />
                 <DataRow title="Collection Type" amount={selectedLoan.type || selectedLoan.collectionType || "-"} />
                 <DataRow title="Payment Method" amount={selectedLoan.paymentMethod || "-"} />
@@ -186,10 +206,11 @@ function AddLoanWizard({ customers, products, onCancel, onSaved }: { customers: 
   const [customerId, setCustomerId] = useState("");
   const [principal, setPrincipal] = useState("10000");
   const [rate, setRate] = useState("18");
-  const [duration, setDuration] = useState("12");
-  const [durationUnit, setDurationUnit] = useState("Months");
-  const [frequency, setFrequency] = useState("Monthly");
+  const [duration, setDuration] = useState("13");
+  const [durationUnit, setDurationUnit] = useState("Days");
+  const [frequency, setFrequency] = useState("Daily");
   const [startDate, setStartDate] = useState(dateOnly());
+  const [adminCollectionMonitoring, setAdminCollectionMonitoring] = useState(false);
 
   const product = products.find((x: any) => x.isActive !== false) ?? products[0];
   const [isCustomerSelectorOpen, setIsCustomerSelectorOpen] = useState(false);
@@ -223,6 +244,8 @@ function AddLoanWizard({ customers, products, onCancel, onSaved }: { customers: 
     if (!product) {
       return Alert.alert("No Product", "No active loan product is configured.");
     }
+    if (Number(rate) < 0) return Alert.alert("Invalid rate", "Enter a valid monthly interest rate.");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !maturityDate) return Alert.alert("Invalid date", "Enter the start date as YYYY-MM-DD.");
     setBusy(true);
     try {
       await platformApi.loans.create({
@@ -233,10 +256,11 @@ function AddLoanWizard({ customers, products, onCancel, onSaved }: { customers: 
         interestRate: Number(rate),
         interestRateBasis: "PerMonth",
         interestCollectionFrequency: frequency,
-        tenureMonths: durationUnit === "Months" ? Number(duration) : Math.max(product.minimumTenureMonths || 1, 1),
+        tenureMonths: Math.max(product.minimumTenureMonths || 1, 1),
         durationValue: Number(duration),
         durationUnit,
         startDate,
+        adminCollectionMonitoring,
       });
       await onSaved();
     } catch (e) {
@@ -307,6 +331,11 @@ function AddLoanWizard({ customers, products, onCancel, onSaved }: { customers: 
           <DataRow title="First Interest Due" amount={firstDue || "-"} />
           <DataRow title="Estimated Total Interest" amount={formatInterestAmount(estimatedTotalInterest)} />
         </Card>
+
+        <Pressable onPress={() => setAdminCollectionMonitoring(value => !value)} style={{ flexDirection: "row", alignItems: "flex-start", gap: 12, padding: 16, borderWidth: 1, borderColor: adminCollectionMonitoring ? colors.cyan : colors.border, borderRadius: 12, backgroundColor: adminCollectionMonitoring ? colors.cyanSoft : colors.white }}>
+          <Ionicons name={adminCollectionMonitoring ? "checkbox" : "square-outline"} size={24} color={adminCollectionMonitoring ? colors.cyan : colors.muted} />
+          <View style={{ flex: 1 }}><Text style={s.title}>INRFS Admin collection monitoring</Text><Text style={s.meta}>Only enable this when you want this loan to appear in the admin collection work queue for follow-up and monitoring.</Text></View>
+        </Pressable>
         
         <Button label="Create Loan" loading={busy} onPress={() => void save()}/>
       </ScrollView>

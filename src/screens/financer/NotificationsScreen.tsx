@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useState } from "react";
 import { View, Text, Pressable, Alert, StyleSheet, ActivityIndicator } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "../../components/AppIcon";
-import { Card, Button, Segmented, Screen } from "../../components/ui";
+import { Button, Segmented, Screen } from "../../components/ui";
 import { pageItems, platformApi } from "../../services/platformApi";
 import { RemoteState, useRemote } from "./shared";
 import { colors, fonts, spacing, radii, shadows } from "../../theme/tokens";

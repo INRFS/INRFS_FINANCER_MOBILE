@@ -1,12 +1,28 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, FlatList, Pressable, ScrollView, Share, StyleSheet, Text, View, ActivityIndicator } from "react-native";
+import { Alert, FlatList, Pressable, ScrollView, StyleSheet, Text, View, ActivityIndicator } from "react-native";
 import { Button, Card, Field, Header, Screen } from "../../components/ui";
 import { pageItems, platformApi } from "../../services/platformApi";
 import { s } from "./styles";
 import { Ionicons } from "../../components/AppIcon";
 import { colors, fonts, radii, spacing } from "../../theme/tokens";
+import { shareCsv } from "../../services/nativeExport";
 
 const REPORT_TYPES = ['customers', 'loans', 'payments', 'interest-schedule', 'overdue'];
+const INTERNAL_COLUMNS = new Set(['id', 'createdBy', 'updatedBy', 'customerId', 'financerId', 'loanId', 'loanProductId']);
+
+const buildReportRows = (sourceRows: any[], references: any) => {
+  const customers = new Map(references.customers.map((item: any) => [String(item.id), item]));
+  const loans = new Map(references.loans.map((item: any) => [String(item.id), item]));
+  return sourceRows.map((source: any) => {
+    const row: any = Object.fromEntries(Object.entries(source).filter(([key]) => !INTERNAL_COLUMNS.has(key)));
+    const customer: any = customers.get(String(source.customerId || source.id));
+    const loan: any = loans.get(String(source.loanId || source.id));
+    if (source.customerId && !row.customerNumber) row.customerNumber = source.customerNumber || customer?.customerNumber;
+    if (source.loanId && !row.loanNumber) row.loanNumber = source.loanNumber || loan?.loanNumber;
+    if (source.financerId && !row.financerNumber) row.financerNumber = source.financerNumber || references.financer?.financerNumber;
+    return row;
+  });
+};
 
 const reportLabel = (value: string) => value.replaceAll('-', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 const columnLabel = (value: string) => value.replace(/([A-Z])/g, ' $1').replace(/^./, (letter) => letter.toUpperCase());
@@ -28,6 +44,7 @@ export function ReportsScreen() {
   const [to, setTo] = useState('');
   
   const [payload, setPayload] = useState({ items: [] });
+  const [references, setReferences] = useState<any>({ customers: [], loans: [], financer: {} });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -35,7 +52,14 @@ export function ReportsScreen() {
     setLoading(true);
     setError('');
     try { 
-      setPayload(await platformApi.reports.get(type, { search, from, to, pageSize: 100 }) as any); 
+      const [report, customerPayload, loanPayload, profile] = await Promise.all([
+        platformApi.reports.get(type, { search, from, to, pageSize: 100 }),
+        platformApi.customers.all(),
+        platformApi.loans.all(),
+        platformApi.profile.get(),
+      ]);
+      setPayload(report as any);
+      setReferences({ customers: pageItems(customerPayload), loans: pageItems(loanPayload), financer: (profile as any)?.financer || {} });
     }
     catch (reason) { 
       setError(reason instanceof Error ? reason.message : String(reason)); 
@@ -49,22 +73,20 @@ export function ReportsScreen() {
     void load(); 
   }, [load]);
 
-  const rows = pageItems(payload);
+  const sourceRows = pageItems(payload);
+  const rows = useMemo(() => buildReportRows(sourceRows, references), [references, sourceRows]);
   const columns = useMemo(() => [...new Set(rows.flatMap((row) => Object.keys(row)))].filter((key) => !['createdBy', 'updatedBy'].includes(key)), [rows]);
 
   const exportCsv = async () => {
     if (!rows.length) return;
     try {
-      const csv = [columns, ...rows.map((row: any) => columns.map((key) => row[key]))]
-        .map((row) => row.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(','))
-        .join('\r\n');
-      await Share.share({ title: `${type}-${new Date().toISOString().slice(0, 10)}.csv`, message: csv });
+      await shareCsv(`${type}-${new Date().toISOString().slice(0, 10)}.csv`, rows);
     } catch (e) {
       Alert.alert("Export Failed", e instanceof Error ? e.message : "Error");
     }
   };
   return (
-    <Screen>
+    <Screen contentStyle={{ paddingBottom: 80 }}>
       <Header 
         title="Reports" 
         subtitle="View and export live reports" 
@@ -151,6 +173,7 @@ export function ReportsScreen() {
         </View>
       ) : (
         <FlatList
+          scrollEnabled={false}
           data={rows}
           keyExtractor={(item, index) => item.id ?? `report-row-${index}`}
           contentContainerStyle={{ paddingBottom: 80, gap: 12 }}
@@ -293,13 +316,9 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     padding: spacing.md,
-    paddingBottom: spacing.xl,
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    marginTop: spacing.sm,
+    backgroundColor: colors.white,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     alignItems: 'center',

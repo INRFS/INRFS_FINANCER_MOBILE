@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { View, Alert } from "react-native";
-import { Card, Field, Button, Header } from "../../components/ui";
+import { Card, Field, Button } from "../../components/ui";
 import { platformApi } from "../../services/platformApi";
 import { RemoteState, useRemote } from "./shared";
 import { s } from "./styles";

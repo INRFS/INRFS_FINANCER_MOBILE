@@ -1,16 +1,17 @@
-import { createDrawerNavigator, DrawerContentScrollView, DrawerItemList, DrawerItem } from "@react-navigation/drawer";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { useState, type ComponentType } from "react";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../auth/AuthContext";
 import { Ionicons } from "../components/AppIcon";
-import { colors, fonts } from "../theme/tokens";
-import { Text, View, StyleSheet, Alert } from "react-native";
 import { Logo } from "../components/Logo";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Card, Header, Screen } from "../components/ui";
+import { colors, fonts } from "../theme/tokens";
 
 import { DashboardScreen } from "../screens/financer/DashboardScreen";
 import { CustomersScreen } from "../screens/financer/CustomersScreen";
 import { LoansScreen } from "../screens/financer/LoansScreen";
 import { DuesScreen } from "../screens/financer/DuesScreen";
-import { DueOverdueScreen } from "../screens/financer/DueOverdueScreen";
 import { LedgerScreen } from "../screens/financer/LedgerScreen";
 import { InterestScheduleScreen } from "../screens/financer/InterestScheduleScreen";
 import { NotificationsScreen } from "../screens/financer/NotificationsScreen";
@@ -19,157 +20,95 @@ import { FinancerServiceChargeScreen } from "../screens/financer/FinancerService
 import { SupportScreen } from "../screens/financer/SupportScreen";
 import { FinancerSettingsScreen } from "../screens/financer/FinancerSettingsScreen";
 
-const Drawer = createDrawerNavigator();
+const Tab = createBottomTabNavigator<any>();
 
-function CustomDrawerContent(props: any) {
+function PortalHeader() {
   const { user, logout } = useAuth();
-  
-  return (
-    <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
-      <View style={s.header}>
-        <Logo size={40} />
-        <View style={s.headerText}>
-          <Text style={s.portalTitle}>INRFS FINANCER</Text>
-          <Text style={s.userName} numberOfLines={1}>
-            {user?.businessName ?? user?.fullName ?? user?.email}
-          </Text>
-        </View>
-      </View>
-      
-      <DrawerContentScrollView {...props} contentContainerStyle={{ paddingTop: 0 }}>
-        <DrawerItemList {...props} />
-      </DrawerContentScrollView>
+  const identity = user?.businessName ?? user?.fullName ?? user?.email ?? "Financer";
+  const confirmLogout = () => Alert.alert("Log out", "Are you sure you want to log out?", [
+    { text: "Cancel", style: "cancel" },
+    { text: "Log out", style: "destructive", onPress: () => void logout() },
+  ]);
+  return <SafeAreaView edges={["top"]} style={s.top}>
+    <Logo size={34}/>
+    <View style={s.portalBadge}><Text style={s.portal}>FINANCER</Text></View>
+    <Text numberOfLines={1} style={s.user}>{identity}</Text>
+    <Pressable accessibilityRole="button" accessibilityLabel="Log out" hitSlop={10} onPress={confirmLogout}>
+      <Ionicons name="log-out-outline" size={24} color={colors.muted}/>
+    </Pressable>
+  </SafeAreaView>;
+}
 
-      <View style={s.footer}>
-        <DrawerItem
-          label="Log out"
-          icon={({ color, size }) => <Ionicons name="log-out-outline" size={size} color={color} />}
-          onPress={() => Alert.alert("Log Out", "Are you sure you want to log out?", [
-            { text: "Cancel", style: "cancel" },
-            { text: "Log Out", style: "destructive", onPress: () => void logout() }
-          ])}
-          labelStyle={s.labelStyle}
-          activeTintColor={colors.error}
-          inactiveTintColor={colors.error}
-        />
-      </View>
-    </SafeAreaView>
-  );
+const moreItems = [
+  ["Interest Schedule", "calendar-outline"],
+  ["Customer Ledger", "document-text-outline"], ["Notifications", "notifications-outline"],
+  ["Reports", "bar-chart-outline"], ["Service Charge", "receipt-outline"],
+  ["Support", "help-circle-outline"], ["Settings", "settings-outline"],
+] as const;
+
+const moreScreens: Record<string, ComponentType<any>> = {
+  "Interest Schedule": InterestScheduleScreen,
+  "Customer Ledger": LedgerScreen, Notifications: NotificationsScreen, Reports: ReportsScreen,
+  "Service Charge": FinancerServiceChargeScreen, Support: SupportScreen, Settings: FinancerSettingsScreen,
+};
+
+function MoreScreen() {
+  const [selected, setSelected] = useState<string | null>(null);
+  if (selected) {
+    const SelectedScreen = moreScreens[selected];
+    if (!SelectedScreen) return null;
+    return <View style={s.morePage}>
+      <Pressable style={s.backRow} onPress={() => setSelected(null)}><Ionicons name="arrow-back" size={20} color={colors.cyan}/><Text style={s.backText}>More</Text></Pressable>
+      <SelectedScreen/>
+    </View>;
+  }
+  return <Screen><Header title="More" subtitle="Financer tools and account services"/>
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.moreList}>
+      <Card>{moreItems.map(([label, icon]) => <Pressable key={label} style={s.moreRow} onPress={() => setSelected(label)}>
+        <View style={s.moreIcon}><Ionicons name={icon} size={20} color={colors.cyan}/></View>
+        <Text style={s.moreLabel}>{label}</Text>
+        <Ionicons name="chevron-forward" size={19} color={colors.subtle}/>
+      </Pressable>)}</Card>
+    </ScrollView>
+  </Screen>;
 }
 
 export function FinancerDrawerNavigator() {
-  return (
-    <Drawer.Navigator
-      drawerContent={(props) => <CustomDrawerContent {...props} />}
-      screenOptions={{
-        headerStyle: { backgroundColor: colors.white },
-        headerTintColor: colors.dark,
-        headerTitleStyle: { fontFamily: fonts.bold, fontSize: 16 },
-        drawerActiveBackgroundColor: `${colors.cyan}15`,
-        drawerActiveTintColor: colors.cyan,
-        drawerInactiveTintColor: colors.subtle,
-        drawerLabelStyle: s.labelStyle,
-        drawerType: "slide",
-      }}
-    >
-      <Drawer.Screen 
-        name="Dashboard" 
-        component={DashboardScreen} 
-        options={{ drawerIcon: ({ color }) => <Ionicons name="grid-outline" size={22} color={color} /> }} 
-      />
-      <Drawer.Screen 
-        name="Customers" 
-        component={CustomersScreen} 
-        options={{ drawerIcon: ({ color }) => <Ionicons name="people-outline" size={22} color={color} /> }} 
-      />
-      <Drawer.Screen 
-        name="Loans" 
-        component={LoansScreen} 
-        options={{ drawerIcon: ({ color }) => <Ionicons name="wallet-outline" size={22} color={color} /> }} 
-      />
-      <Drawer.Screen 
-        name="Payments" 
-        component={DuesScreen} 
-        options={{ drawerIcon: ({ color }) => <Ionicons name="cash-outline" size={22} color={color} /> }} 
-      />
-      <Drawer.Screen 
-        name="Interest Schedule" 
-        component={InterestScheduleScreen} 
-        options={{ drawerIcon: ({ color }) => <Ionicons name="calendar-outline" size={22} color={color} /> }} 
-      />
-      <Drawer.Screen 
-        name="Due / Overdue" 
-        component={DueOverdueScreen} 
-        options={{ drawerIcon: ({ color }) => <Ionicons name="alert-circle-outline" size={22} color={color} /> }} 
-      />
-      <Drawer.Screen 
-        name="Customer Ledger" 
-        component={LedgerScreen} 
-        options={{ drawerIcon: ({ color }) => <Ionicons name="document-text-outline" size={22} color={color} /> }} 
-      />
-      <Drawer.Screen 
-        name="Notifications" 
-        component={NotificationsScreen} 
-        options={{ drawerIcon: ({ color }) => <Ionicons name="notifications-outline" size={22} color={color} /> }} 
-      />
-      <Drawer.Screen 
-        name="Reports" 
-        component={ReportsScreen} 
-        options={{ drawerIcon: ({ color }) => <Ionicons name="bar-chart-outline" size={22} color={color} /> }} 
-      />
-      <Drawer.Screen 
-        name="Service Charge" 
-        component={FinancerServiceChargeScreen} 
-        options={{ drawerIcon: ({ color }) => <Ionicons name="receipt-outline" size={22} color={color} /> }} 
-      />
-      <Drawer.Screen 
-        name="Support" 
-        component={SupportScreen} 
-        options={{ drawerIcon: ({ color }) => <Ionicons name="information-circle-outline" size={22} color={color} /> }} 
-      />
-      <Drawer.Screen 
-        name="Settings" 
-        component={FinancerSettingsScreen} 
-        options={{ drawerIcon: ({ color }) => <Ionicons name="settings-outline" size={22} color={color} /> }} 
-      />
-    </Drawer.Navigator>
-  );
+  const icon = ({ route }: any) => ({ focused, color }: any) => <Ionicons
+    name={route.name === "Dashboard" ? "grid-outline" : route.name === "Customers" ? "people-outline" : route.name === "Loans" ? "wallet-outline" : route.name === "Payments" ? "cash-outline" : "menu"}
+    size={21} color={color}/>;
+  return <View style={s.app}>
+    <PortalHeader/>
+    <Tab.Navigator screenOptions={({ route }) => ({
+      headerShown: false,
+      tabBarIcon: icon({ route }),
+      tabBarActiveTintColor: colors.cyan,
+      tabBarInactiveTintColor: colors.subtle,
+      tabBarLabelStyle: s.navText,
+      tabBarStyle: s.nav,
+    })}>
+      <Tab.Screen name="Dashboard" component={DashboardScreen}/>
+      <Tab.Screen name="Customers" component={CustomersScreen}/>
+      <Tab.Screen name="Loans" component={LoansScreen}/>
+      <Tab.Screen name="Payments" component={DuesScreen}/>
+      <Tab.Screen name="More" component={MoreScreen}/>
+    </Tab.Navigator>
+  </View>;
 }
 
 const s = StyleSheet.create({
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    marginBottom: 8,
-  },
-  headerText: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  portalTitle: {
-    fontFamily: fonts.bold,
-    fontSize: 14,
-    color: colors.cyan,
-    letterSpacing: 0.5,
-  },
-  userName: {
-    fontFamily: fonts.medium,
-    fontSize: 12,
-    color: colors.muted,
-    marginTop: 2,
-  },
-  labelStyle: {
-    fontFamily: fonts.medium,
-    fontSize: 14,
-    marginLeft: -10,
-  },
-  footer: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: 8,
-    paddingBottom: 8,
-  }
+  app: { flex: 1, backgroundColor: colors.background },
+  top: { minHeight: 60, paddingHorizontal: 14, gap: 9, flexDirection: "row", alignItems: "center", backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.border },
+  portalBadge: { backgroundColor: "rgba(16,175,233,0.11)", paddingHorizontal: 10, paddingVertical: 7, borderRadius: 14 },
+  portal: { color: colors.cyan, fontFamily: fonts.bold, fontSize: 9, letterSpacing: .6 },
+  user: { flex: 1, color: colors.muted, fontFamily: fonts.medium, fontSize: 11, textAlign: "right" },
+  nav: { minHeight: 70, paddingTop: 5, backgroundColor: colors.white, borderTopColor: colors.border },
+  navText: { fontFamily: fonts.medium, fontSize: 9 },
+  moreList: { paddingBottom: 90 },
+  morePage: { flex: 1, backgroundColor: colors.background },
+  backRow: { minHeight: 44, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.border },
+  backText: { color: colors.cyan, fontFamily: fonts.semibold, fontSize: 13 },
+  moreRow: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
+  moreIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: "rgba(16,175,233,0.10)", alignItems: "center", justifyContent: "center" },
+  moreLabel: { flex: 1, color: colors.dark, fontFamily: fonts.semibold, fontSize: 14 },
 });

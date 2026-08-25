@@ -1,12 +1,12 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { Alert, FlatList, Pressable, ScrollView, Text, View, Modal, StyleSheet, ActivityIndicator } from "react-native";
+import { Alert, FlatList, Pressable, ScrollView, Text, View, Modal, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Button, Card, Field, Header, Screen, Segmented, KpiCard, Grid, Badge } from "../../components/ui";
+import { Button, Card, Field, Header, Segmented, KpiCard, Grid, Badge } from "../../components/ui";
 import { pageItems, platformApi } from "../../services/platformApi";
 import { RemoteState, useRemote } from "./shared";
 import { s } from "./styles";
 import { Ionicons } from "../../components/AppIcon";
-import { colors, fonts, radii, spacing, shadows } from "../../theme/tokens";
+import { colors, fonts, radii, spacing } from "../../theme/tokens";
 
 const MONTHS: Record<string, number> = {
   Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
@@ -73,7 +73,7 @@ const isDue = (item: any) => !isOverdue(item);
 
 const rupees = (v: unknown) => `₹${Number(v ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 export function DueOverdueScreen() {
-  const load = useCallback(() => platformApi.collections.list({ pageSize: 200 }), []);
+  const load = useCallback(() => platformApi.payments.allSchedules(), []);
   const state = useRemote(load, { items: [] } as any);
 
   const [activeTab, setActiveTab] = useState('Due Payments');
@@ -90,13 +90,24 @@ export function DueOverdueScreen() {
   const [busyRows, setBusyRows] = useState<Record<string, boolean>>({});
 
   const mappedItems = useMemo(() => {
-    return pageItems(state.data).map((item: any) => ({
-      ...item,
-      loanId: item.loanNumber || item.loanId,
-      dueAmount: item.due || item.dueAmount,
-      daysOverdue: item.daysPastDue ?? item.daysOverdue,
-      status: (item.daysPastDue > 0 || String(item.status).toLowerCase().includes('overdue')) ? 'Overdue' : 'Due'
-    }));
+    const today = getToday();
+    return pageItems(state.data)
+      .filter((item: any) => {
+        const status = String(item.status ?? '').toLowerCase();
+        const balance = Number(item.balance ?? item.remainingAmount ?? (Number(item.totalDue ?? 0) - Number(item.amountPaid ?? 0)));
+        return status !== 'paid' && status !== 'success' && status !== 'completed' && balance > 0;
+      })
+      .map((item: any) => {
+        const dueDate = normalizeDate(item.dueDate);
+        const overdueDays = dueDate && dueDate < today ? Math.max(1, Math.floor((today.getTime() - dueDate.getTime()) / 86400000)) : 0;
+        return {
+          ...item,
+          displayLoanId: item.loanNumber || item.loanId,
+          dueAmount: item.balance ?? item.remainingAmount ?? (Number(item.totalDue ?? 0) - Number(item.amountPaid ?? 0)),
+          daysOverdue: overdueDays,
+          status: overdueDays > 0 || String(item.status).toLowerCase().includes('overdue') ? 'Overdue' : 'Due'
+        };
+      });
   }, [state.data]);
 
   const matchesDateFilter = useCallback((item: any) => {
@@ -124,7 +135,7 @@ export function DueOverdueScreen() {
       if (!matchesDateFilter(item)) return false;
       if (!searchValue) return true;
       const customer = String(item.customer || item.customerName || '').toLowerCase();
-      const loanId = String(item.loanId || '').toLowerCase();
+      const loanId = String(item.displayLoanId || item.loanId || '').toLowerCase();
       return customer.includes(searchValue) || loanId.includes(searchValue);
     });
 
@@ -169,7 +180,7 @@ export function DueOverdueScreen() {
   }, [mappedItems]);
 
   const handleSendReminder = async (item: any) => {
-    const itemId = item.id || item.loanId;
+    const itemId = item.loanId;
     if (busyRows[itemId]) return;
     setBusyRows(prev => ({ ...prev, [itemId]: true }));
     try {
@@ -193,64 +204,44 @@ export function DueOverdueScreen() {
     setSearch('');
   };
 
+  const listHeader = <View style={styles.listHeader}>
+    <Header title="Upcoming Dues" subtitle="Track upcoming and overdue payments" />
+    {summary.overdueCount > 0 && (
+      <Pressable onPress={() => setActiveTab('Overdue')} style={({ pressed }) => [styles.alertBanner, pressed && { opacity: 0.8 }]}>
+        <Ionicons name="warning-outline" size={20} color={colors.error} />
+        <View style={s.flex}><Text style={styles.alertTitle}>{summary.overdueCount} overdue payment{summary.overdueCount !== 1 ? 's' : ''}</Text><Text style={styles.alertSubtitle}>{rupees(summary.overdueAmount)} needs follow-up</Text></View>
+        <Button label="Review" variant="secondary" onPress={() => setActiveTab('Overdue')} />
+      </Pressable>
+    )}
+    <Text style={styles.sectionTitle}>Collection Overview</Text>
+    <Grid>
+      <KpiCard label="Due Today" value={rupees(summary.dueTodayAmount)} icon="cash-outline" accent="green" />
+      <KpiCard label="This Week" value={rupees(summary.dueWeekAmount)} icon="calendar-outline" accent="cyan" />
+      <KpiCard label="Overdue" value={rupees(summary.overdueAmount)} icon="warning-outline" accent="error" />
+      <KpiCard label="Attention" value={`${summary.overdueCount} account${summary.overdueCount !== 1 ? 's' : ''}`} icon="alert-circle-outline" accent="orange" />
+    </Grid>
+    <Segmented options={[`Due Payments (${mappedItems.filter(isDue).length})`, `Overdue (${summary.overdueCount})`]} value={activeTab === 'Overdue' ? `Overdue (${summary.overdueCount})` : `Due Payments (${mappedItems.filter(isDue).length})`} onChange={(val) => setActiveTab(val.startsWith('Overdue') ? 'Overdue' : 'Due Payments')} />
+    <View style={s.row}>
+      <Field label="" value={search} onChangeText={setSearch} placeholder="Search customer or loan ID..." style={{ flex: 1, marginTop: -7 }} />
+      {search ? <Pressable onPress={() => setSearch('')} style={styles.clearSearch}><Ionicons name="close" size={16} color={colors.muted} /></Pressable> : null}
+    </View>
+    <View style={s.row}>
+      <Button style={s.flex} label="Filter" icon="options-outline" variant="secondary" onPress={() => setIsFilterSheetOpen(true)} />
+      <Button style={s.flex} label={sortOrder} icon="options-outline" variant="secondary" onPress={() => setSortOrder(prev => prev === 'Earliest First' ? 'Latest First' : 'Earliest First')} />
+    </View>
+    <RemoteState {...state} retry={() => void state.refresh()} />
+  </View>;
+
 // ... part 3
   return (
-    <Screen>
-      <Header title="Upcoming Dues" subtitle="Track upcoming and overdue payments" />
-
-      {summary.overdueCount > 0 && (
-        <Pressable onPress={() => setActiveTab('Overdue')} style={({ pressed }) => [styles.alertBanner, pressed && { opacity: 0.8 }]}>
-          <Ionicons name="warning-outline" size={20} color={colors.error} />
-          <View style={s.flex}>
-            <Text style={styles.alertTitle}>{summary.overdueCount} overdue payment{summary.overdueCount !== 1 ? 's' : ''}</Text>
-            <Text style={styles.alertSubtitle}>{rupees(summary.overdueAmount)} needs follow-up</Text>
-          </View>
-          <Button label="Review" variant="secondary" onPress={() => setActiveTab('Overdue')} />
-        </Pressable>
-      )}
-
-      <Text style={styles.sectionTitle}>Collection Overview</Text>
-      <Grid>
-        <KpiCard label="Due Today" value={rupees(summary.dueTodayAmount)} icon="cash-outline" accent="green" />
-        <KpiCard label="This Week" value={rupees(summary.dueWeekAmount)} icon="calendar-outline" accent="cyan" />
-        <KpiCard label="Overdue" value={rupees(summary.overdueAmount)} icon="warning-outline" accent="error" />
-        <KpiCard label="Attention" value={`${summary.overdueCount} account${summary.overdueCount !== 1 ? 's' : ''}`} icon="alert-circle-outline" accent="orange" />
-      </Grid>
-
-      <View style={[s.gap, { marginTop: spacing.md }]}>
-        <Segmented 
-          options={[`Due Payments (${mappedItems.filter(isDue).length})`, `Overdue (${summary.overdueCount})`]} 
-          value={activeTab === 'Overdue' ? `Overdue (${summary.overdueCount})` : `Due Payments (${mappedItems.filter(isDue).length})`} 
-          onChange={(val) => setActiveTab(val.startsWith('Overdue') ? 'Overdue' : 'Due Payments')}
-        />
-
-        <View style={s.row}>
-          <Field 
-            label="" 
-            value={search} 
-            onChangeText={setSearch} 
-            placeholder="Search customer or loan ID..." 
-            style={{ flex: 1, marginTop: -7 }}
-          />
-          {search ? (
-            <Pressable onPress={() => setSearch('')} style={styles.clearSearch}>
-              <Ionicons name="close" size={16} color={colors.muted} />
-            </Pressable>
-          ) : null}
-        </View>
-
-        <View style={[s.row, { marginTop: -5 }]}>
-          <Button style={s.flex} label="Filter" icon="options-outline" variant="secondary" onPress={() => setIsFilterSheetOpen(true)} />
-          <Button style={s.flex} label={sortOrder} icon="options-outline" variant="secondary" onPress={() => setSortOrder(prev => prev === 'Earliest First' ? 'Latest First' : 'Earliest First')} />
-        </View>
-      </View>
-
-      <RemoteState {...state} retry={() => void state.refresh()} />
-
+    <View style={styles.screen}>
       <FlatList
+        style={{ flex: 1 }}
+        nestedScrollEnabled
         data={filteredItems}
-        keyExtractor={(item, idx) => item.id || item.loanId || String(idx)}
-        contentContainerStyle={{ paddingBottom: 80, gap: 14, paddingTop: 14 }}
+        keyExtractor={(item, idx) => item.id || `${item.loanId}-${idx}`}
+        contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: 120, gap: 14, flexGrow: 1 }}
+        ListHeaderComponent={listHeader}
         ListEmptyComponent={
           !state.loading ? (
             <View style={{ alignItems: 'center', paddingVertical: 40 }}>
@@ -270,7 +261,7 @@ export function DueOverdueScreen() {
         renderItem={({ item }) => {
           const custName = item.customer || item.customerName || 'Unknown';
           const initial = custName.charAt(0).toUpperCase();
-          const itemId = item.id || item.loanId;
+          const itemId = item.loanId;
           const isToday = dateToKey(item.dueDate) === dateToKey(new Date());
 
           return (
@@ -282,7 +273,7 @@ export function DueOverdueScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={s.title}>{custName}</Text>
-                    <Text style={s.meta}>{item.loanId}</Text>
+                    <Text style={s.meta}>{item.displayLoanId}</Text>
                   </View>
                 </View>
                 <Badge status={item.status} />
@@ -346,11 +337,13 @@ export function DueOverdueScreen() {
         </View>
       </Modal>
 
-    </Screen>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.background },
+  listHeader: { paddingTop: spacing.xl, paddingBottom: spacing.md, gap: spacing.xl },
   alertBanner: {
     backgroundColor: '#fef2f2',
     borderWidth: 1,

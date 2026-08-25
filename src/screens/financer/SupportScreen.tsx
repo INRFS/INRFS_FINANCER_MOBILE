@@ -22,7 +22,7 @@ export function SupportScreen() {
   const loadTickets = useCallback(() => platformApi.support.list({ pageSize: 100 }), []);
   const state = useRemote(loadTickets, { items: [] } as any);
   
-  const [openFaqIndex, setOpenFaqIndex] = useState<number>(-1);
+  const [openFaqIndex, setOpenFaqIndex] = useState<number>(0);
   const [createOpen, setCreateOpen] = useState(false);
   const [selected, setSelected] = useState<any | null>(null);
   
@@ -150,7 +150,7 @@ export function SupportScreen() {
   const tickets = pageItems(state.data);
 
   return (
-    <Screen>
+    <Screen scroll={false} contentStyle={{ paddingBottom: 0 }}>
       <Header 
         title="Help & Support" 
         subtitle="Create a request and keep the complete conversation in one place." 

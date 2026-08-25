@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { Screen, Header, Segmented } from "../../components/ui";
 import { s } from "./styles";
 import { NotificationsScreen } from "./NotificationsScreen";

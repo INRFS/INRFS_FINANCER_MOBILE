@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Alert, Image, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, StyleSheet, Text, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
-import { Button, Card, Field, Header, Segmented, ToggleRow, Screen, DataRow } from "../../components/ui";
+import { Button, Card, Field, Header, Segmented, ToggleRow, Screen } from "../../components/ui";
 import { useAuth } from "../../auth/AuthContext";
 import { platformApi } from "../../services/platformApi";
 import { Ionicons } from "../../components/AppIcon";
@@ -101,17 +101,22 @@ export function FinancerSettingsScreen() {
   };
 
   const save = async () => {
+    if (!form.name.trim() || !form.businessName.trim() || !form.city.trim() || !form.state.trim()) {
+      return Alert.alert("Required fields", "Name, business name, city, and state are required.");
+    }
+    const mobile = form.mobile.replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "");
+    if (!/^[6-9]\d{9}$/.test(mobile)) return Alert.alert("Invalid mobile", "Enter a valid 10-digit Indian mobile number.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return Alert.alert("Invalid email", "Enter a valid email address.");
     setBusy(true);
     try {
       const saved = await platformApi.profile.update({
-        fullName: form.name,
-        businessName: form.businessName,
-        mobile: form.mobile,
-        email: form.email,
-        city: form.city,
-        state: form.state,
+        fullName: form.name.trim(),
+        businessName: form.businessName.trim(),
+        mobile,
+        email: form.email.trim().toLowerCase(),
+        city: form.city.trim(),
+        state: form.state.trim(),
         profileImageDataUrl: form.profileImage || null,
-        notifications,
       });
       updateUser({
         firstName: saved.user?.firstName,
@@ -144,7 +149,7 @@ export function FinancerSettingsScreen() {
       
       <View style={{ marginBottom: spacing.xl }}>
         <Segmented 
-          options={["Profile", "Notifications", "SMS Settings", "Security"]} 
+          options={["Profile"]}
           value={activeTab} 
           onChange={setActiveTab} 
         />

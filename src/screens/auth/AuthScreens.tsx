@@ -43,28 +43,37 @@ type LoginProps = NativeStackScreenProps<RootStackParamList, "FinancerLogin">;
 export function FinancerLoginScreen({ navigation }: LoginProps) {
   const { completeLogin } = useAuth();
   const [mobile, setMobile] = useState("");
+  const [forgotEmail, setForgotEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [forgotPassword, setForgotPassword] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const submit = async () => {
-    const digits = mobile.replace(/\D/g, "");
-    if (digits.length < 10) return setError("Enter a valid 10-digit mobile number");
     if (forgotPassword) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(forgotEmail.trim())) return setError("Enter a valid email address.");
       setSubmitting(true); setError("");
-      try { await api.post("/auth/password/forgot", { email: mobile }, { auth: false }); setError("If this account exists, password reset instructions have been sent."); }
+      try { await api.post("/auth/password/forgot", { email: forgotEmail.trim().toLowerCase() }, { auth: false }); setError("If this account exists, password reset instructions have been sent."); }
       catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Unable to request a password reset."); }
       finally { setSubmitting(false); }
       return;
     }
+    const digits = mobile.replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "");
+    if (!/^[6-9]\d{9}$/.test(digits)) return setError("Enter a valid 10-digit Indian mobile number.");
     if (!password.trim()) return setError("Enter your password");
     setSubmitting(true); setError("");
-    try { const tokens = await api.post("/auth/login/financer", { email: mobile, password, portal: "financer" }, { auth: false }); await completeLogin(tokens); }
+    try {
+      const tokens = await api.post("/auth/login/financer", { email: digits, password, portal: "financer" }, { auth: false });
+      const roles = tokens?.user?.roles;
+      if (Array.isArray(roles) && !roles.some((role: string) => ["FinancerOwner", "FinancerManager", "LoanOfficer", "CollectionAgent"].includes(role))) {
+        throw new Error("This account does not have access to the financer portal.");
+      }
+      await completeLogin(tokens);
+    }
     catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Unable to sign in."); }
     finally { setSubmitting(false); }
   };
-  return <AuthShell><Logo size={50} /><View style={styles.authHeading}><Text style={styles.authTitle}>{forgotPassword ? "Forgot password?" : "Welcome back"}</Text><Text style={styles.authSub}>{forgotPassword ? "Enter your registered mobile number to reset your password." : "Manage your customers and loans with ease."}</Text></View><Field label="Mobile Number" placeholder="+91 98765 43210" keyboardType="phone-pad" value={mobile} onChangeText={(v) => { setMobile(v); setError(""); }} />{!forgotPassword ? <><View><Field label="Password" placeholder="Enter your password" secureTextEntry={!passwordVisible} value={password} onChangeText={(v) => { setPassword(v); setError(""); }} /><Pressable onPress={() => setPasswordVisible(!passwordVisible)} style={styles.eye}><Ionicons name={passwordVisible ? "eye-off-outline" : "eye-outline"} size={20} color={colors.muted} /></Pressable></View><Pressable onPress={() => { setForgotPassword(true); setError(""); }}><Text style={styles.forgotLink}>Forgot password?</Text></Pressable></> : null}{error ? <Text style={styles.formError}>{error}</Text> : null}<Button loading={submitting} label={forgotPassword ? "Send reset instructions" : "Login"} onPress={submit} style={styles.fullButton} />{forgotPassword ? <Button label="Back to Login" icon="arrow-back" variant="ghost" onPress={() => { setForgotPassword(false); setError(""); }} /> : <><Text style={styles.authLinkText}>New to INRFS? <Text style={styles.link} onPress={() => navigation.navigate("FinancerRegister")}>Create account</Text></Text><Button label="Back to portal selection" icon="arrow-back" variant="ghost" onPress={() => navigation.navigate("PortalSelection")} /></>}</AuthShell>;
+  return <AuthShell><Logo size={50} /><View style={styles.authHeading}><Text style={styles.authTitle}>{forgotPassword ? "Reset your password" : "Welcome back"}</Text><Text style={styles.authSub}>{forgotPassword ? "Enter your registered email address. We’ll send reset instructions if an account matches." : "Manage your customers and loans with ease."}</Text></View>{forgotPassword ? <Field label="Email Address" placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" value={forgotEmail} onChangeText={(v) => { setForgotEmail(v); setError(""); }} /> : <Field label="Mobile Number" placeholder="+91 98765 43210" keyboardType="phone-pad" value={mobile} onChangeText={(v) => { setMobile(v); setError(""); }} />}{!forgotPassword ? <><View><Field label="Password" placeholder="Enter your password" secureTextEntry={!passwordVisible} value={password} onChangeText={(v) => { setPassword(v); setError(""); }} /><Pressable onPress={() => setPasswordVisible(!passwordVisible)} style={styles.eye}><Ionicons name={passwordVisible ? "eye-off-outline" : "eye-outline"} size={20} color={colors.muted} /></Pressable></View><Pressable onPress={() => { setForgotPassword(true); setForgotEmail(""); setError(""); }}><Text style={styles.forgotLink}>Forgot password?</Text></Pressable></> : null}{error ? <Text style={styles.formError}>{error}</Text> : null}<Button loading={submitting} label={forgotPassword ? "Send reset instructions" : "Login"} onPress={submit} style={styles.fullButton} />{forgotPassword ? <Button label="Back to Login" icon="arrow-back" variant="ghost" onPress={() => { setForgotPassword(false); setError(""); }} /> : <><Text style={styles.authLinkText}>New to INRFS? <Text style={styles.link} onPress={() => navigation.navigate("FinancerRegister")}>Create account</Text></Text><Button label="Back to portal selection" icon="arrow-back" variant="ghost" onPress={() => navigation.navigate("PortalSelection")} /></>}</AuthShell>;
 }
 
 type RegisterProps = NativeStackScreenProps<RootStackParamList, "FinancerRegister">;
@@ -75,11 +84,13 @@ export function FinancerRegisterScreen({ navigation }: RegisterProps) {
   const update = (key: keyof typeof form, value: string) => setForm((old) => ({ ...old, [key]: value }));
   const submit = async () => {
     if (Object.values(form).some((v) => !v.trim())) return setError("Complete all fields to continue");
-    if (!form.email.includes("@") || form.mobile.replace(/\D/g, "").length < 10) return setError("Enter a valid mobile number and email address");
+    const mobile = form.mobile.replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "");
+    if (!/^[6-9]\d{9}$/.test(mobile)) return setError("Enter a valid 10-digit Indian mobile number.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return setError("Enter a valid email address.");
     setSubmitting(true); setError("");
     try {
-      const challenge = await api.post("/auth/register/financer", { fullName: form.name, businessName: form.business, mobile: form.mobile, email: form.email, city: form.city, state: form.state }, { auth: false });
-      navigation.navigate("FinancerOtp", { mobile: form.mobile, challengeId: challenge.challengeId, registering: true });
+      const challenge = await api.post("/auth/register/financer", { fullName: form.name.trim(), businessName: form.business.trim(), mobile: form.mobile.trim(), email: form.email.trim().toLowerCase(), city: form.city.trim(), state: form.state.trim() }, { auth: false });
+      navigation.navigate("FinancerOtp", { mobile: form.email.trim().toLowerCase(), challengeId: challenge.challengeId, registering: true });
     } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Unable to create the account."); }
     finally { setSubmitting(false); }
   };
@@ -142,6 +153,14 @@ export function ResetPasswordScreen({ navigation, route }: ResetProps) {
 type LegalProps = NativeStackScreenProps<RootStackParamList, "LegalNotice">;
 export function LegalNoticeScreen({ navigation, route }: LegalProps) {
   const privacy = route.params.type === "privacy"; return <Screen><Button label="Back to INRFS" icon="arrow-back" variant="ghost" onPress={() => navigation.goBack()}/><Logo size={42}/><Header title={privacy ? "Privacy Policy" : "Terms of Use"} subtitle="Legal information"/><Card><Text style={styles.legalStatus}>Draft placeholder — replace with content reviewed and approved by your legal adviser before public launch.</Text><Text style={styles.legalHeading}>{privacy ? "How information is handled" : "Using the platform"}</Text><Text style={styles.legalBody}>{privacy ? "INRFS processes account and operational information required to provide its financer workflows. The final policy should identify the data controller, retention periods, subprocessors, user rights, and applicable contact details." : "Access to INRFS is intended for authorized users operating within their assigned role. The final terms should define account responsibilities, acceptable use, service availability, fees, limitations, and dispute handling."}</Text><Text style={styles.legalHeading}>Questions</Text><Text style={styles.legalBody}>Contact support@inrfs.in for platform-related enquiries.</Text></Card></Screen>;
+}
+
+export function PrivacyPolicyScreen({ navigation }: NativeStackScreenProps<RootStackParamList, "PrivacyPolicy">) {
+  return <LegalNoticeScreen navigation={navigation as never} route={{ key: "privacy-policy", name: "LegalNotice", params: { type: "privacy" } } as never}/>;
+}
+
+export function TermsOfUseScreen({ navigation }: NativeStackScreenProps<RootStackParamList, "TermsOfUse">) {
+  return <LegalNoticeScreen navigation={navigation as never} route={{ key: "terms", name: "LegalNotice", params: { type: "terms" } } as never}/>;
 }
 
 function AuthShell({ children, scroll = false }: { children: React.ReactNode; scroll?: boolean }) {

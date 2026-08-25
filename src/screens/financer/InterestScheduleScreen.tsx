@@ -1,5 +1,7 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { View, Text, FlatList, Share, Alert } from "react-native";
+import { View, Text, FlatList, Alert } from "react-native";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 import { Card, Header, Screen, Segmented, Button, Field, DataRow } from "../../components/ui";
 import { pageItems, platformApi } from "../../services/platformApi";
 import { RemoteState, useRemote } from "./shared";
@@ -37,14 +39,18 @@ export function InterestScheduleScreen() {
       const csv = [headings, ...data]
         .map((row) => row.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`).join(","))
         .join("\r\n");
-      await Share.share({ title: `interest-schedule-${new Date().toISOString().slice(0, 10)}.csv`, message: csv });
+      const fileName = `interest-schedule-${new Date().toISOString().slice(0, 10)}.csv`;
+      const uri = `${FileSystem.cacheDirectory}${fileName}`;
+      await FileSystem.writeAsStringAsync(uri, csv, { encoding: FileSystem.EncodingType.UTF8 });
+      if (!await Sharing.isAvailableAsync()) throw new Error("File sharing is unavailable on this device.");
+      await Sharing.shareAsync(uri, { mimeType: "text/csv", dialogTitle: `Export ${fileName}` });
     } catch (e) {
       Alert.alert("Export Failed", e instanceof Error ? e.message : "Error");
     }
   };
 
   return (
-    <Screen>
+    <Screen scroll={false} contentStyle={{ paddingBottom: 0 }}>
       <Header title="Interest Schedule" subtitle="Automated monthly & periodic schedules" />
       <View style={s.gap}>
         <Card>
@@ -72,6 +78,7 @@ export function InterestScheduleScreen() {
                 </View>
               </View>
               <DataRow title="Principal" amount={rupees(item.principal)} />
+              <DataRow title="Interest Rate" amount={item.rate} />
               <DataRow title="Due Date" amount={String(item.dueDate).slice(0, 10)} />
             </Card>
           )}

@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, FlatList, Share, Text, View, Modal, ScrollView, Pressable, StyleSheet, ActivityIndicator } from "react-native";
+import { Alert, FlatList, Text, View, Modal, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Button, Card, Field, KpiCard, Grid, Header, Screen } from "../../components/ui";
+import { Button, Card, Field, Header, Screen } from "../../components/ui";
 import { pageItems, platformApi } from "../../services/platformApi";
 import { s } from "./styles";
 import { Ionicons } from "../../components/AppIcon";
 import { colors, fonts, radii, spacing } from "../../theme/tokens";
+import { shareCsv } from "../../services/nativeExport";
 
 const rupees = (v: unknown) => `₹${Number(v ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
@@ -14,6 +15,17 @@ function formatLedgerDate(value: any) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
   return date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function LedgerSummaryCard({ label, value, accent }: { label: string; value: string; accent: "cyan" | "green" }) {
+  const accentColor = accent === "green" ? colors.green : colors.cyan;
+  return <Card style={[styles.summaryCard, { borderTopColor: accentColor }]}>
+    <View style={[styles.summaryIcon, { backgroundColor: accent === "green" ? colors.greenSoft : colors.cyanSoft }]}>
+      <Ionicons name={accent === "green" ? "arrow-down-outline" : "arrow-up-outline"} size={18} color={accentColor} />
+    </View>
+    <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{value}</Text>
+    <Text style={styles.summaryLabel}>{label}</Text>
+  </Card>;
 }
 
 export function LedgerScreen() {
@@ -90,14 +102,21 @@ export function LedgerScreen() {
     credit: sum.credit + Number(item.credit || 0) 
   }), { debit: 0, credit: 0 }), [ledgerData.entries]);
   
-  const currentBalance = totals.debit - totals.credit;
+  const currentBalance = ledgerData.entries.length
+    ? Number(ledgerData.entries[ledgerData.entries.length - 1]?.balance ?? totals.debit - totals.credit)
+    : 0;
 
   const exportCsv = async () => {
     if (!ledgerData.entries.length) return;
     try {
-      const data = [["Date", "Transaction", "Type", "Debit", "Credit", "Balance"], ...ledgerData.entries.map((item) => [item.transactionAt, item.transactionNumber, item.type, item.debit, item.credit, item.balance])];
-      const csv = data.map((row) => row.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`).join(",")).join("\r\n");
-      await Share.share({ title: `${ledgerData.customer?.customerNumber || "customer"}-ledger.csv`, message: csv });
+      await shareCsv(`${ledgerData.customer?.customerNumber || "customer"}-ledger.csv`, ledgerData.entries.map((item) => ({
+        Date: item.transactionAt,
+        Transaction: item.transactionNumber,
+        Type: item.type,
+        Debit: item.debit,
+        Credit: item.credit,
+        Balance: item.balance,
+      })));
     } catch (e) {
       Alert.alert("Export failed", e instanceof Error ? e.message : "Failed");
     }
@@ -106,7 +125,7 @@ export function LedgerScreen() {
   const selectedCustomer = ledgerData.customer || customers.find(c => c.id === selectedId);
 
   return (
-    <Screen>
+    <Screen contentStyle={{ paddingBottom: 80 }}>
       <Header 
         title="Customer Ledger" 
         subtitle="View customer transactions and balance" 
@@ -159,13 +178,9 @@ export function LedgerScreen() {
               <Text style={styles.balanceSub}>Outstanding amount</Text>
             </Card>
             
-            <View style={[s.row, { marginTop: 10 }]}>
-              <View style={[styles.kpiWrapper, { marginRight: 5 }]}>
-                <KpiCard label="Disbursed" value={rupees(totals.debit)} accent="cyan" />
-              </View>
-              <View style={[styles.kpiWrapper, { marginLeft: 5 }]}>
-                <KpiCard label="Received" value={rupees(totals.credit)} accent="green" />
-              </View>
+            <View style={styles.kpiRow}>
+              <View style={styles.kpiWrapper}><LedgerSummaryCard label="Disbursed" value={rupees(totals.debit)} accent="cyan" /></View>
+              <View style={styles.kpiWrapper}><LedgerSummaryCard label="Received" value={rupees(totals.credit)} accent="green" /></View>
             </View>
           </View>
           <Text style={[styles.sectionTitle, { marginTop: spacing.lg, marginBottom: spacing.sm }]}>TRANSACTIONS</Text>
@@ -181,6 +196,7 @@ export function LedgerScreen() {
             </View>
           ) : (
             <FlatList
+              scrollEnabled={false}
               data={ledgerData.entries}
               keyExtractor={item => item.id}
               contentContainerStyle={{ paddingBottom: 80, gap: 12 }}
@@ -345,6 +361,38 @@ const styles = StyleSheet.create({
   },
   kpiWrapper: {
     flex: 1,
+    minWidth: 0,
+  },
+  kpiRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+  },
+  summaryCard: {
+    width: '100%',
+    minHeight: 138,
+    borderTopWidth: 3,
+    justifyContent: 'space-between',
+  },
+  summaryIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: radii.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summaryValue: {
+    color: colors.dark,
+    fontFamily: fonts.extrabold,
+    fontSize: 21,
+    letterSpacing: -0.4,
+    marginTop: 12,
+  },
+  summaryLabel: {
+    color: colors.muted,
+    fontFamily: fonts.medium,
+    fontSize: 12,
+    marginTop: 6,
   },
   amtLabel: {
     fontFamily: fonts.medium,

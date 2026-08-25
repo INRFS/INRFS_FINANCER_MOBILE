@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Alert, FlatList, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View, ActivityIndicator } from "react-native";
+import { Alert, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View, ActivityIndicator } from "react-native";
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Badge, Button, Card, Header, Screen } from "../../components/ui";
 import { pageItems, platformApi } from "../../services/platformApi";
@@ -60,14 +62,17 @@ export function FinancerServiceChargeScreen() {
 
   const handleDownloadStatement = async (statement: any) => {
     try {
-      const csv = `Billing Month,Interest Collected,Service Charge Rate,Amount Payable,Amount Paid,Outstanding,Status\r\n"${statement.month}","${statement.interestCollected}","${statement.chargeRate}%","${statement.amountPayable}","${statement.amountPaid}","${statement.outstanding}","${statement.status}"`;
-      await Share.share({ title: `Statement-${statement.month}.csv`, message: csv });
+      const cell = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] || character);
+      const html = `<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;color:#10243e;padding:32px}h1{color:#12aee0;margin-bottom:4px}.sub{color:#64748b;margin-bottom:28px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.box{border:1px solid #dce5ee;border-radius:10px;padding:14px}.label{font-size:11px;color:#64748b;text-transform:uppercase}.value{font-size:18px;font-weight:700;margin-top:6px}.note{margin-top:24px;padding:14px;background:#fff7df;border:1px solid #f4d878;border-radius:10px}</style></head><body><h1>INRFS</h1><div class="sub">Monthly service charge statement · ${cell(statement.month)}</div><div class="grid"><div class="box"><div class="label">Interest Collected</div><div class="value">${cell(formatCurrency(statement.interestCollected))}</div></div><div class="box"><div class="label">Service Charge Rate</div><div class="value">${cell(statement.chargeRate)}%</div></div><div class="box"><div class="label">Amount Payable</div><div class="value">${cell(formatCurrency(statement.amountPayable))}</div></div><div class="box"><div class="label">Amount Paid</div><div class="value">${cell(formatCurrency(statement.amountPaid))}</div></div><div class="box"><div class="label">Outstanding</div><div class="value">${cell(formatCurrency(statement.outstanding))}</div></div><div class="box"><div class="label">Status</div><div class="value">${cell(statement.status)}</div></div></div><div class="note">Service charges are collected only through the official operations process. Do not make payment through any unauthorized channel.</div></body></html>`;
+      const { uri } = await Print.printToFileAsync({ html });
+      if (!await Sharing.isAvailableAsync()) throw new Error("PDF sharing is unavailable on this device.");
+      await Sharing.shareAsync(uri, { mimeType: "application/pdf", dialogTitle: `Service charge statement - ${statement.month}` });
     } catch (e) {
       Alert.alert("Export Failed", e instanceof Error ? e.message : "Error");
     }
   };
   return (
-    <Screen>
+    <Screen scroll={false} contentStyle={{ paddingBottom: 0 }}>
       <Header 
         title="Service Charge" 
         subtitle="Your monthly service charge based on interest collected" 
@@ -95,7 +100,12 @@ export function FinancerServiceChargeScreen() {
       ) : (
         <FlatList
           data={billing.slice(1)} // All items except the first one which is currentBilling
-          keyExtractor={(item) => item.month ?? item.id}
+          keyExtractor={(item, index) => String(
+            item.id
+              ?? item.invoiceId
+              ?? item.invoiceNumber
+              ?? `${item.periodStart ?? item.month ?? "billing"}-${item.periodEnd ?? "period"}-${index}`
+          )}
           contentContainerStyle={{ paddingBottom: 80 }}
           ListHeaderComponent={
             <>

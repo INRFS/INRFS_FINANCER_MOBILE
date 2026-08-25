@@ -1,7 +1,9 @@
-import type { ComponentProps, ReactNode } from "react";
+import { useRef, type ComponentProps, type ReactNode } from "react";
 import { Ionicons } from "./AppIcon";
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -38,9 +40,7 @@ export const accentSoft: Record<Accent, string> = {
   error: colors.errorSoft,
 };
 
-import { KeyboardAvoidingView, Platform } from "react-native";
-
-export function Screen({ children, contentStyle }: { children: ReactNode; contentStyle?: StyleProp<ViewStyle> }) {
+export function Screen({ children, contentStyle, scroll = true }: { children: ReactNode; contentStyle?: StyleProp<ViewStyle>; scroll?: boolean }) {
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
       <View pointerEvents="none" style={styles.ambient}>
@@ -48,9 +48,13 @@ export function Screen({ children, contentStyle }: { children: ReactNode; conten
         <View style={styles.ambientPurple} />
       </View>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.screen, contentStyle]} showsVerticalScrollIndicator={false}>
-          {children}
-        </ScrollView>
+        {scroll ? (
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.screen, contentStyle]} showsVerticalScrollIndicator={false}>
+            {children}
+          </ScrollView>
+        ) : (
+          <View style={[styles.screen, { flex: 1 }, contentStyle]}>{children}</View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -149,9 +153,10 @@ export function SectionTitle({ children, action }: { children: ReactNode; action
 }
 
 export function Segmented({ options, value, onChange, accent = "cyan" }: { options: string[]; value: string; onChange: (value: string) => void; accent?: Accent }) {
-  return <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.segments}>{options.map((option) => {
+  const scrollRef = useRef<ScrollView>(null);
+  return <ScrollView ref={scrollRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.segments}>{options.map((option, index) => {
     const selected = option === value;
-    return <Pressable key={option} onPress={() => onChange(option)} style={[styles.segment, selected && { backgroundColor: accentColors[accent], borderColor: accentColors[accent] }]}><Text style={[styles.segmentText, selected && styles.segmentTextSelected]}>{option}</Text></Pressable>;
+    return <Pressable key={option} onPress={() => { onChange(option); scrollRef.current?.scrollTo({ x: Math.max(0, index * 96 - 48), animated: true }); }} style={[styles.segment, selected && { backgroundColor: accentColors[accent], borderColor: accentColors[accent] }]}><Text style={[styles.segmentText, selected && styles.segmentTextSelected]}>{option}</Text></Pressable>;
   })}</ScrollView>;
 }
 
@@ -196,7 +201,7 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: radii.pill, alignSelf: "flex-start", borderWidth: 1, borderColor: "rgba(255,255,255,0.75)" },
   badgeText: { fontFamily: fonts.semibold, fontSize: 10 },
   sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
-  segments: { gap: 8 },
+  segments: { gap: 8, paddingRight: spacing.lg },
   segment: { borderRadius: radii.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: "rgba(255,255,255,0.94)", paddingVertical: 10, paddingHorizontal: 15 },
   segmentText: { color: colors.muted, fontFamily: fonts.medium, fontSize: 12 },
   segmentTextSelected: { color: colors.white, fontFamily: fonts.semibold },

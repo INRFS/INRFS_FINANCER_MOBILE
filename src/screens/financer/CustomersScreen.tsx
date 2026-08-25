@@ -1,18 +1,18 @@
-import React, { useCallback, useMemo, useState, useEffect } from "react";
+import React, { useCallback, useMemo, useState } from "react";
+import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { Alert, FlatList, Pressable, ScrollView, Text, View, Modal, StyleSheet, TextInput, KeyboardAvoidingView, Platform } from "react-native";
-import { Button, Card, DataRow, Field, Header, Screen, Segmented, SectionTitle, Badge, IconBubble, KpiCard, Grid } from "../../components/ui";
+import { Button, Card, DataRow, Field, Header, Screen, Segmented, Badge, KpiCard, Grid } from "../../components/ui";
 import { pageItems, platformApi } from "../../services/platformApi";
 import { RemoteState, useRemote } from "./shared";
-import { s } from "./styles";
 import { Ionicons } from "../../components/AppIcon";
 import { colors, fonts, radii, spacing } from "../../theme/tokens";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { downloadAndShareDocument, pickAndUploadDocument, pickDocument, uploadPickedDocument } from "../../services/nativeDocuments";
 
 const todayISO = () => new Date(Date.now() + 330 * 60 * 1000).toISOString().slice(0, 10);
 
-const formatCurrency = (v: unknown) => `â‚¹${Number(v ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
-const toNumber = (value: unknown) => { const n = Number(String(value ?? '').replace(/[â‚¹,\s]/g, '')); return Number.isFinite(n) ? n : 0; };
+const formatCurrency = (v: unknown) => `₹${Number(v ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+const toNumber = (value: unknown) => { const n = Number(String(value ?? '').replace(/[₹,\s]/g, '')); return Number.isFinite(n) ? n : 0; };
 const getInitial = (name: string) => name?.trim()?.charAt(0)?.toUpperCase() || 'C';
 
 const formatDate = (value: string | null | undefined) => {
@@ -20,6 +20,20 @@ const formatDate = (value: string | null | undefined) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+const getLoanStartDate = (loan: any) =>
+  loan.startDate ?? loan.dateGiven ?? loan.disbursementDate ?? loan.disbursedAt ?? null;
+
+const getLoanNextDueDate = (loan: any) => {
+  const directDate = loan.nextDueDate ?? loan.nextDue;
+  if (directDate && directDate !== '-') return directDate;
+
+  return (loan.schedules ?? [])
+    .filter((schedule: any) => !['Paid', 'Success', 'Cancelled'].includes(String(schedule.status)))
+    .map((schedule: any) => schedule.dueDate)
+    .filter(Boolean)
+    .sort((a: string, b: string) => new Date(a).getTime() - new Date(b).getTime())[0] ?? null;
 };
 
 const addLoanDuration = (startDate: string, value: string, unit: string) => {
@@ -38,6 +52,69 @@ const addLoanDuration = (startDate: string, value: string, unit: string) => {
     date.setDate(Math.min(targetDay, lastDay));
   }
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
+const dateDays = (from: string, to: string) => from && to
+  ? Math.round((new Date(`${to}T00:00:00`).getTime() - new Date(`${from}T00:00:00`).getTime()) / 86_400_000)
+  : 0;
+
+const firstInterestDue = (startDate: string, frequency: string, maturityDate: string) => {
+  const candidate = frequency === 'Daily' ? addLoanDuration(startDate, '1', 'Days')
+    : frequency === 'Weekly' ? addLoanDuration(startDate, '1', 'Weeks')
+      : frequency === 'Monthly' ? addLoanDuration(startDate, '1', 'Months')
+        : maturityDate;
+  return candidate && maturityDate && candidate < maturityDate ? candidate : maturityDate;
+};
+
+const collectionInterestLabel = (frequency: string) => ({
+  Daily: 'Estimated Interest per Day',
+  Weekly: 'Estimated Interest per Week',
+  Monthly: 'Estimated First Monthly Interest',
+  AtMaturity: 'Estimated Interest at Maturity',
+}[frequency] || 'Estimated Collection Interest');
+
+const monthlyInterestForDays = (principal: number, monthlyRate: number, days: number) =>
+  principal * monthlyRate / 100 * 12 * days / 365;
+
+const normalizeIndianMobile = (value: string) => {
+  const digits = value.replace(/\D/g, '');
+  return digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits;
+};
+
+const isValidAdultDate = (value: string) => {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return false;
+  const now = new Date();
+  const cutoff = new Date(now.getFullYear() - 18, now.getMonth(), now.getDate());
+  return date <= cutoff;
+};
+
+const validateCustomerStep = (step: number, form: {
+  name: string; phone: string; email: string; dob: string; city: string;
+  stateName: string; pinCode: string; aadhaar: string; pan: string;
+}) => {
+  if (step === 1) {
+    if (!form.name.trim()) return 'Full name is required.';
+    if (!/^[6-9]\d{9}$/.test(normalizeIndianMobile(form.phone))) return 'Enter a valid 10-digit Indian mobile number.';
+    if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return 'Enter a valid email address.';
+    if (!isValidAdultDate(form.dob)) return 'Customer must have a valid date of birth and be at least 18 years old.';
+  }
+  if (step === 2) {
+    if (!form.city.trim()) return 'City is required.';
+    if (!form.stateName.trim()) return 'State is required.';
+    if (!/^[1-9]\d{5}$/.test(form.pinCode.trim())) return 'Enter a valid 6-digit Indian PIN code.';
+  }
+  if (step === 3) {
+    const aadhaar = form.aadhaar.replace(/\D/g, '');
+    if (form.aadhaar.trim() && !/^[2-9]\d{11}$/.test(aadhaar)) return 'Aadhaar must contain 12 digits and cannot begin with 0 or 1.';
+    if (form.pan.trim() && !/^[A-Z]{5}\d{4}[A-Z]$/.test(form.pan.trim().toUpperCase())) return 'PAN must use the format ABCDE1234F.';
+  }
+  return '';
 };
 
 export function CustomersScreen() {
@@ -82,8 +159,9 @@ export function CustomersScreen() {
       const activeLoans = loans.filter(l => l.status === 'Active' || l.status === 'Due' || l.status === 'Overdue').length;
       const outstanding = loans.reduce((sum, l) => sum + Number(l.outstanding || 0), 0);
       const nextDue = loans
-        .filter(l => l.status !== 'Closed' && l.nextDue && l.nextDue !== '-')
-        .map(l => l.nextDue)
+        .filter(l => l.status !== 'Closed')
+        .map(getLoanNextDueDate)
+        .filter(Boolean)
         .sort()[0] || '-';
         
       return { ...cust, loans, payments, activeLoans, outstanding, nextDue };
@@ -98,6 +176,7 @@ export function CustomersScreen() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [isAdding, setIsAdding] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
+  const [openSelectedForEdit, setOpenSelectedForEdit] = useState(false);
 
   const rows = useMemo(() => {
     return (state.data?.items ?? []).filter((x: any) => {
@@ -114,48 +193,57 @@ export function CustomersScreen() {
   const totalCustomers = state.data?.items?.length || 0;
   const activeCustomers = state.data?.items?.filter((c: any) => c.status === 'Active').length || 0;
   const overdueCustomers = state.data?.items?.filter((c: any) => c.status === 'Overdue').length || 0;
+  const currentMonth = todayISO().slice(0, 7);
+  const newCustomersThisMonth = state.data?.items?.filter((customer: any) =>
+    String(customer.createdAt ?? customer.createdOn ?? customer.registrationDate ?? '').slice(0, 7) === currentMonth
+  ).length || 0;
 
   return (
-    <Screen>
-      <Header
-        title="Customers"
-        subtitle="Manage your customers and their loan accounts."
-        action={<Button label="Add" icon="add" onPress={() => setIsAdding(true)} />}
-      />
-
-      <Grid>
-        <KpiCard label="Total Customers" value={String(totalCustomers)} accent="cyan" icon="people-outline" />
-        <KpiCard label="Active Customers" value={String(activeCustomers)} accent="green" icon="checkmark-circle-outline" />
-        <KpiCard label="New This Month" value="12" accent="purple" icon="person-add-outline" />
-        <KpiCard label="Overdue Customers" value={String(overdueCustomers)} accent="error" icon="alert-circle-outline" />
-      </Grid>
-
-      <View style={{ gap: 12, marginTop: 8 }}>
-        <View style={localStyles.searchWrap}>
-          <View style={localStyles.searchIcon}>
-            <Ionicons name="search" size={20} color={colors.subtle} />
-          </View>
-          <TextInput
-            style={localStyles.searchInput}
-            placeholder="Search by name, phone or ID"
-            value={search}
-            onChangeText={setSearch}
-            placeholderTextColor={colors.subtle}
-          />
-        </View>
-        <Segmented
-          options={["All", "Active", "Due", "Overdue", "Closed"]}
-          value={statusFilter}
-          onChange={setStatusFilter}
-        />
-      </View>
-
-      <RemoteState {...state} retry={() => void state.refresh()} />
-
+    <Screen scroll={false} contentStyle={{ paddingBottom: 0 }}>
       <FlatList
         data={rows}
         keyExtractor={x => x.id}
-        contentContainerStyle={{ paddingBottom: 80, gap: 14, paddingTop: 14 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 80, gap: 14 }}
+        ListHeaderComponent={
+          <View style={{ gap: spacing.xl }}>
+            <Header
+              title="Customers"
+              subtitle="Manage your customers and their loan accounts."
+              action={<Button label="Add" icon="add" onPress={() => setIsAdding(true)} />}
+            />
+
+            <Grid>
+              <KpiCard label="Total Customers" value={String(totalCustomers)} accent="cyan" icon="people-outline" />
+              <KpiCard label="Active Customers" value={String(activeCustomers)} accent="green" icon="checkmark-circle-outline" />
+              <KpiCard label="Customers Added This Month" value={String(newCustomersThisMonth)} accent="purple" icon="person-add-outline" />
+              <KpiCard label="Overdue Customers" value={String(overdueCustomers)} accent="error" icon="alert-circle-outline" />
+            </Grid>
+
+            <View style={{ gap: 12, marginTop: 8 }}>
+              <View style={localStyles.searchWrap}>
+                <View style={localStyles.searchIcon}>
+                  <Ionicons name="search" size={20} color={colors.subtle} />
+                </View>
+                <TextInput
+                  style={localStyles.searchInput}
+                  placeholder="Search by name, phone or ID"
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholderTextColor={colors.subtle}
+                />
+              </View>
+              <Segmented
+                options={["All", "Active", "Due", "Overdue", "Closed"]}
+                value={statusFilter}
+                onChange={setStatusFilter}
+              />
+            </View>
+
+            <RemoteState {...state} retry={() => void state.refresh()} />
+          </View>
+        }
         renderItem={({ item: x }) => (
           <Card style={{ padding: 16 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16 }}>
@@ -164,7 +252,7 @@ export function CustomersScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontFamily: fonts.bold, fontSize: 16, color: colors.dark }}>{x.fullName || x.name}</Text>
-                <Text style={{ fontFamily: fonts.medium, fontSize: 12, color: colors.muted, marginTop: 2 }}>{x.customerNumber || x.id}  Â·  {x.phone || x.mobile}</Text>
+                <Text style={{ fontFamily: fonts.medium, fontSize: 12, color: colors.muted, marginTop: 2 }}>{x.customerNumber || x.id} · {x.phone || x.mobile}</Text>
               </View>
               <Badge status={x.status || "Active"} />
             </View>
@@ -181,13 +269,13 @@ export function CustomersScreen() {
             </View>
             
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <Text style={localStyles.metricLabel}>Next Due</Text>
-              <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.dark }}>{x.nextDue === '-' ? 'No upcoming due' : formatDate(x.nextDue)}</Text>
+              <View><Text style={localStyles.metricLabel}>City</Text><Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.dark }}>{x.city || '-'}</Text></View>
+              <View style={{ alignItems: "flex-end" }}><Text style={localStyles.metricLabel}>Next Due</Text><Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.dark }}>{x.nextDue === '-' ? 'No upcoming due' : formatDate(x.nextDue)}</Text></View>
             </View>
 
             <View style={{ flexDirection: "row", gap: 10 }}>
               <Button style={{ flex: 1 }} label="View" variant="secondary" onPress={() => setSelectedCustomer(x)} />
-              <Button style={{ flex: 1 }} label="Edit" variant="ghost" onPress={() => Alert.alert("Edit", "Please use View -> Edit instead for full details.")} />
+              <Button style={{ flex: 1 }} label="Edit" variant="ghost" onPress={() => { setOpenSelectedForEdit(true); setSelectedCustomer(x); }} />
             </View>
           </Card>
         )}
@@ -205,7 +293,8 @@ export function CustomersScreen() {
         <CustomerDetailsModal 
           customer={selectedCustomer} 
           products={state.data?.products ?? []}
-          close={() => setSelectedCustomer(null)} 
+          initialEdit={openSelectedForEdit}
+          close={() => { setSelectedCustomer(null); setOpenSelectedForEdit(false); }}
           refreshList={() => void state.refresh()} 
         />
       )}
@@ -213,11 +302,12 @@ export function CustomersScreen() {
   );
 }
 
-function CustomerDetailsModal({ customer, products, close, refreshList }: { customer: any, products: any[], close: () => void, refreshList: () => void }) {
+function CustomerDetailsModal({ customer, products, initialEdit = false, close, refreshList }: { customer: any, products: any[], initialEdit?: boolean, close: () => void, refreshList: () => void }) {
   const [tab, setTab] = useState("Overview");
+  const [detailsCustomer, setDetailsCustomer] = useState(customer);
   const insets = useSafeAreaInsets();
   
-  const [isEditCustomerOpen, setIsEditCustomerOpen] = useState(false);
+  const [isEditCustomerOpen, setIsEditCustomerOpen] = useState(initialEdit);
   const [isAddLoanOpen, setIsAddLoanOpen] = useState(false);
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
 
@@ -236,11 +326,11 @@ function CustomerDetailsModal({ customer, products, close, refreshList }: { cust
           <View style={{ padding: 20 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 16, marginBottom: 20 }}>
               <View style={[localStyles.avatar, { width: 56, height: 56, borderRadius: 28 }]}>
-                <Text style={[localStyles.avatarText, { fontSize: 22 }]}>{getInitial(customer.fullName || customer.name)}</Text>
+                <Text style={[localStyles.avatarText, { fontSize: 22 }]}>{getInitial(detailsCustomer.fullName || detailsCustomer.name)}</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: fonts.bold, fontSize: 20, color: colors.dark }}>{customer.fullName || customer.name}</Text>
-                <Text style={{ fontFamily: fonts.medium, fontSize: 13, color: colors.muted, marginTop: 4 }}>{customer.customerNumber || customer.id}  Â·  <Badge status={customer.status || "Active"} /></Text>
+                <Text style={{ fontFamily: fonts.bold, fontSize: 20, color: colors.dark }}>{detailsCustomer.fullName || detailsCustomer.name}</Text>
+                <Text style={{ fontFamily: fonts.medium, fontSize: 13, color: colors.muted, marginTop: 4 }}>{detailsCustomer.customerNumber || detailsCustomer.id} · <Badge status={detailsCustomer.status || "Active"} /></Text>
               </View>
             </View>
 
@@ -254,19 +344,19 @@ function CustomerDetailsModal({ customer, products, close, refreshList }: { cust
           </View>
 
           <View style={{ paddingHorizontal: 20 }}>
-            {tab === "Overview" && <OverviewTab customer={customer} />}
-            {tab === "Loans" && <LoansTab loans={customer.loans || []} />}
-            {tab === "Payments" && <PaymentsTab payments={customer.payments || []} />}
-            {tab === "Schedule" && <ScheduleTab loans={customer.loans || []} />}
-            {tab === "Ledger" && <LedgerTab customer={customer} />}
-            {tab === "Documents" && <CustomerDocuments customer={customer} />}
+            {tab === "Overview" && <OverviewTab customer={detailsCustomer} />}
+            {tab === "Loans" && <LoansTab loans={detailsCustomer.loans || []} />}
+            {tab === "Payments" && <PaymentsTab payments={detailsCustomer.payments || []} />}
+            {tab === "Schedule" && <ScheduleTab loans={detailsCustomer.loans || []} />}
+            {tab === "Ledger" && <LedgerTab customer={detailsCustomer} />}
+            {tab === "Documents" && <CustomerDocuments customer={detailsCustomer} />}
           </View>
         </ScrollView>
       </View>
 
-      {isEditCustomerOpen && <EditCustomerModal customer={customer} close={() => setIsEditCustomerOpen(false)} refreshList={refreshList} />}
-      {isAddLoanOpen && <AddLoanModal customer={customer} products={products} close={() => setIsAddLoanOpen(false)} refreshList={refreshList} />}
-      {isPaymentOpen && <RecordPaymentModal customer={customer} close={() => setIsPaymentOpen(false)} refreshList={refreshList} />}
+      {isEditCustomerOpen && <EditCustomerModal customer={detailsCustomer} close={() => setIsEditCustomerOpen(false)} refreshList={refreshList} onUpdated={setDetailsCustomer} />}
+      {isAddLoanOpen && <AddLoanModal customer={detailsCustomer} products={products} close={() => setIsAddLoanOpen(false)} refreshList={refreshList} />}
+      {isPaymentOpen && <RecordPaymentModal customer={detailsCustomer} close={() => setIsPaymentOpen(false)} refreshList={refreshList} />}
     </Modal>
   );
 }
@@ -310,8 +400,8 @@ function LoansTab({ loans }: { loans: any[] }) {
             <View style={{ width: "45%" }}><Text style={localStyles.metricLabel}>Principal</Text><Text style={localStyles.metricValue}>{formatCurrency(loan.principal)}</Text></View>
             <View style={{ width: "45%" }}><Text style={localStyles.metricLabel}>Rate</Text><Text style={localStyles.metricValue}>{loan.annualInterestRate || loan.rate}%</Text></View>
             <View style={{ width: "45%" }}><Text style={localStyles.metricLabel}>Frequency</Text><Text style={localStyles.metricValue}>{loan.interestCollectionFrequency || loan.frequency}</Text></View>
-            <View style={{ width: "45%" }}><Text style={localStyles.metricLabel}>Start Date</Text><Text style={localStyles.metricValue}>{formatDate(loan.startDate)}</Text></View>
-            <View style={{ width: "45%" }}><Text style={localStyles.metricLabel}>Next Due</Text><Text style={localStyles.metricValue}>{formatDate(loan.nextDue)}</Text></View>
+            <View style={{ width: "45%" }}><Text style={localStyles.metricLabel}>Start Date</Text><Text style={localStyles.metricValue}>{formatDate(getLoanStartDate(loan))}</Text></View>
+            <View style={{ width: "45%" }}><Text style={localStyles.metricLabel}>Next Due</Text><Text style={localStyles.metricValue}>{formatDate(getLoanNextDueDate(loan))}</Text></View>
           </View>
         </Card>
       ))}
@@ -339,21 +429,21 @@ function PaymentsTab({ payments }: { payments: any[] }) {
 }
 
 function ScheduleTab({ loans }: { loans: any[] }) {
-  const rows = loans.flatMap((loan) => (loan.schedules || []).map((schedule: any) => ({ ...schedule, loanNumber: loan.displayId || loan.id })));
+  const rows = loans.flatMap((loan) => (loan.schedules || []).map((schedule: any) => ({ ...schedule, loanNumber: loan.displayId || loan.loanNumber || loan.id })));
   if (!rows.length) return <EmptyState icon="calendar-outline" message="No scheduled dues." />;
   return (
     <View style={{ gap: 12 }}>
       {rows.map((row: any) => (
         <Card key={row.id} style={{ padding: 16 }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 8 }}>
-            <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.dark }}>{row.loanNumber}</Text>
-            <Badge status={row.status || "Due"} />
+          <View style={{ flexDirection: "row", alignItems: "flex-start", marginBottom: 8, gap: 10 }}>
+            <Text style={{ flex: 1, fontFamily: fonts.bold, fontSize: 14, lineHeight: 20, color: colors.dark }} numberOfLines={2}>{row.loanNumber}</Text>
+            <View style={{ flexShrink: 0 }}><Badge status={row.status || "Due"} /></View>
           </View>
           <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.muted, marginBottom: 8 }}>Due: {formatDate(row.dueDate)}</Text>
-          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-            <View><Text style={localStyles.metricLabel}>Interest Due</Text><Text style={localStyles.metricValue}>{formatCurrency(row.interestDue)}</Text></View>
-            <View><Text style={localStyles.metricLabel}>Principal Due</Text><Text style={localStyles.metricValue}>{formatCurrency(row.principalDue)}</Text></View>
-            <View><Text style={localStyles.metricLabel}>Total Due</Text><Text style={localStyles.metricValue}>{formatCurrency(row.remainingAmount ?? row.balance ?? row.totalDue)}</Text></View>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <View style={{ flex: 1 }}><Text style={localStyles.metricLabel}>Interest Due</Text><Text style={localStyles.metricValue}>{formatCurrency(row.interestDue)}</Text></View>
+            <View style={{ flex: 1 }}><Text style={localStyles.metricLabel}>Principal Due</Text><Text style={localStyles.metricValue}>{formatCurrency(row.principalDue)}</Text></View>
+            <View style={{ flex: 1, alignItems: "flex-end" }}><Text style={localStyles.metricLabel}>Total Due</Text><Text style={localStyles.metricValue}>{formatCurrency(row.remainingAmount ?? row.balance ?? row.totalDue)}</Text></View>
           </View>
         </Card>
       ))}
@@ -408,13 +498,23 @@ function CustomerDocuments({ customer }: { customer: any }) {
       <RemoteState {...state} retry={() => void state.refresh()} />
       {pageItems(state.data).map((x: any) => (
         <Card key={x.id} style={{ padding: 16 }}>
-          <DataRow title={x.originalFileName ?? x.fileName ?? "Document"} subtitle={`${x.category ?? ""} Â· ${x.status ?? ""}`} />
+          <DataRow title={x.originalFileName ?? x.fileName ?? "Document"} subtitle={`${x.category ?? ""} · ${x.status ?? ""}`} />
           <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
-            <Button style={{ flex: 1 }} label="Open" variant="secondary" onPress={() => void downloadAndShareDocument(x.id, x.originalFileName)} />
-            <Button style={{ flex: 1 }} label="Delete" variant="danger" onPress={async () => {
-              try { await platformApi.documents.remove(x.id); await state.refresh(); } 
-              catch (e) { Alert.alert("Error", "Could not delete"); }
+            <Button style={{ flex: 1 }} label="Open" variant="secondary" onPress={async () => {
+              try {
+                await downloadAndShareDocument(x.id, x.originalFileName ?? x.fileName);
+              } catch (e) {
+                Alert.alert("Document not opened", e instanceof Error ? e.message : "Download or viewer unavailable.");
+              }
             }} />
+            <Button style={{ flex: 1 }} label="Delete" variant="danger" onPress={() => Alert.alert(
+              "Delete document?",
+              `This will permanently delete ${x.originalFileName ?? x.fileName ?? "this document"}.`,
+              [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: async () => {
+                try { await platformApi.documents.remove(x.id); await state.refresh(); }
+                catch { Alert.alert("Error", "Could not delete"); }
+              } }],
+            )} />
           </View>
         </Card>
       ))}
@@ -431,27 +531,48 @@ function EmptyState({ icon, message }: { icon: any, message: string }) {
     </View>
   );
 }
-function EditCustomerModal({ customer, close, refreshList }: { customer: any, close: () => void, refreshList: () => void }) {
+function EditCustomerModal({ customer, close, refreshList, onUpdated }: { customer: any, close: () => void, refreshList: () => void, onUpdated: (customer: any) => void }) {
   const [busy, setBusy] = useState(false);
   const [name, setName] = useState(customer.fullName || customer.name || "");
   const [phone, setPhone] = useState(customer.phone || customer.mobile || "");
+  const [email, setEmail] = useState(customer.email || "");
+  const [dob, setDob] = useState(String(customer.dateOfBirth || customer.dob || "").slice(0, 10));
+  const [gender, setGender] = useState(customer.gender || "Select");
+  const [houseNumber, setHouseNumber] = useState(customer.houseNumber || customer.addressLine1 || "");
+  const [street, setStreet] = useState(customer.street || "");
+  const [area, setArea] = useState(customer.area || customer.addressLine2 || "");
   const [city, setCity] = useState(customer.city || "");
   const [stateName, setStateName] = useState(customer.state || "");
   const [pinCode, setPinCode] = useState(customer.postalCode || customer.pinCode || "");
+  const aadhaar = customer.aadhaarMasked || customer.aadhaar || "";
+  const pan = customer.panMasked || customer.pan || "";
 
   const save = async () => {
-    if (!name.trim() || !phone.trim() || !city.trim() || !stateName.trim() || !pinCode.trim()) {
-      return Alert.alert("Missing Fields", "Please complete all required fields.");
-    }
+    const mobile = phone.replace(/\D/g, '').replace(/^91(?=\d{10}$)/, '');
+    if (!name.trim()) return Alert.alert("Invalid name", "Full name is required.");
+    if (!/^[6-9]\d{9}$/.test(mobile)) return Alert.alert("Invalid mobile", "Enter a valid 10-digit Indian mobile number.");
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return Alert.alert("Invalid email", "Enter a valid email address.");
+    const birthDate = new Date(`${dob}T00:00:00`);
+    const adultCutoff = new Date(); adultCutoff.setFullYear(adultCutoff.getFullYear() - 18);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dob) || Number.isNaN(birthDate.getTime()) || birthDate > adultCutoff) return Alert.alert("Invalid birth date", "Customer must have a valid date of birth and be at least 18 years old.");
+    if (!city.trim() || !stateName.trim()) return Alert.alert("Missing address", "City and state are required.");
+    if (!/^[1-9]\d{5}$/.test(pinCode.trim())) return Alert.alert("Invalid PIN", "Enter a valid 6-digit Indian PIN code.");
     setBusy(true);
     try {
-      await platformApi.customers.update(customer.id, {
+      const updated = await platformApi.customers.update(customer.id, {
         fullName: name.trim(),
-        phone: phone.trim(),
+        dateOfBirth: dob,
+        gender: gender === "Select" ? null : gender,
+        phone: mobile,
+        email: email.trim() || null,
+        addressLine1: [houseNumber.trim(), street.trim()].filter(Boolean).join(', ') || area.trim(),
+        addressLine2: area.trim() || null,
         city: city.trim(),
         state: stateName.trim(),
         postalCode: pinCode.trim(),
+        status: customer.status || 'Active',
       });
+      onUpdated({ ...customer, ...updated });
       refreshList();
       close();
     } catch (e) {
@@ -473,10 +594,21 @@ function EditCustomerModal({ customer, close, refreshList }: { customer: any, cl
             </View>
             <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
               <Field label="Full Name *" value={name} onChangeText={setName} />
-              <Field label="Mobile *" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+              <Field label="Mobile Number *" value={phone} onChangeText={setPhone} keyboardType="phone-pad" maxLength={13} />
+              <Field label="Email Address" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+              <Field label="Date of Birth *" value={dob} onChangeText={setDob} placeholder="YYYY-MM-DD" />
+              <View style={{ gap: 8 }}>
+                <Text style={localStyles.metricLabel}>Gender</Text>
+                <Segmented options={["Select", "Male", "Female", "Other"]} value={gender} onChange={setGender} />
+              </View>
+              <Field label="House / Flat Number" value={houseNumber} onChangeText={setHouseNumber} />
+              <Field label="Street" value={street} onChangeText={setStreet} />
+              <Field label="Area" value={area} onChangeText={setArea} />
               <Field label="City *" value={city} onChangeText={setCity} />
               <Field label="State *" value={stateName} onChangeText={setStateName} />
-              <Field label="PIN Code *" value={pinCode} onChangeText={setPinCode} keyboardType="number-pad" />
+              <Field label="PIN Code *" value={pinCode} onChangeText={setPinCode} keyboardType="number-pad" maxLength={6} />
+              <Field label="Aadhaar (identity changes require KYC)" value={aadhaar} editable={false} />
+              <Field label="PAN (identity changes require KYC)" value={pan} editable={false} />
               <View style={{ flexDirection: "row", gap: 12, marginTop: 12 }}>
                 <Button style={{ flex: 1 }} label="Cancel" variant="secondary" onPress={close} disabled={busy} />
                 <Button style={{ flex: 1 }} label="Save Changes" onPress={() => void save()} loading={busy} />
@@ -490,21 +622,32 @@ function EditCustomerModal({ customer, close, refreshList }: { customer: any, cl
 }
 
 function AddLoanModal({ customer, products, close, refreshList }: { customer: any, products: any[], close: () => void, refreshList: () => void }) {
+  const product = products.find(x => x.isActive !== false) || products[0];
   const [busy, setBusy] = useState(false);
   const [principal, setPrincipal] = useState("");
-  const [rate, setRate] = useState("18");
-  const [durationValue, setDurationValue] = useState("12");
-  const [durationUnit, setDurationUnit] = useState("Months");
-  const [collectionFreq, setCollectionFreq] = useState("Monthly");
+  const [rate, setRate] = useState(String(product?.annualInterestRate ?? 18));
+  const [durationValue, setDurationValue] = useState("13");
+  const [durationUnit, setDurationUnit] = useState("Days");
+  const [collectionFreq, setCollectionFreq] = useState("Daily");
   const [startDate, setStartDate] = useState(todayISO());
+  const [adminCollectionMonitoring, setAdminCollectionMonitoring] = useState(false);
+
+  const principalAmount = toNumber(principal);
+  const monthlyRate = toNumber(rate);
+  const maturityDate = addLoanDuration(startDate, durationValue, durationUnit);
+  const firstDueDate = firstInterestDue(startDate, collectionFreq, maturityDate);
+  const collectionInterest = monthlyInterestForDays(principalAmount, monthlyRate, dateDays(startDate, firstDueDate));
+  const totalInterest = monthlyInterestForDays(principalAmount, monthlyRate, dateDays(startDate, maturityDate));
 
   const save = async () => {
     const p = toNumber(principal);
-    if (p <= 0 || !durationValue) return Alert.alert("Error", "Please enter valid loan details.");
+    if (p <= 0) return Alert.alert("Invalid principal", "Enter a valid principal amount.");
+    if (toNumber(durationValue) <= 0) return Alert.alert("Invalid period", "Enter a valid number of periods.");
+    if (monthlyRate < 0) return Alert.alert("Invalid rate", "Enter a valid monthly interest rate.");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !maturityDate) return Alert.alert("Invalid date", "Enter the start date as YYYY-MM-DD.");
     
     setBusy(true);
     try {
-      const product = products.find(x => x.isActive !== false) || products[0];
       if (!product) throw new Error("No active loan product.");
       if (p < Number(product.minimumPrincipal) || p > Number(product.maximumPrincipal)) {
          throw new Error(`Principal must be between ${formatCurrency(product.minimumPrincipal)} and ${formatCurrency(product.maximumPrincipal)}`);
@@ -520,7 +663,8 @@ function AddLoanModal({ customer, products, close, refreshList }: { customer: an
         durationUnit,
         interestRate: toNumber(rate),
         interestRateBasis: 'PerMonth',
-        interestCollectionFrequency: collectionFreq
+        interestCollectionFrequency: collectionFreq,
+        adminCollectionMonitoring
       });
       refreshList();
       close();
@@ -542,19 +686,34 @@ function AddLoanModal({ customer, products, close, refreshList }: { customer: an
               <Pressable onPress={close}><Ionicons name="close" size={24} color={colors.subtle} /></Pressable>
             </View>
             <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
-              <Field label="Principal Amount (â‚¹) *" value={principal} onChangeText={setPrincipal} keyboardType="number-pad" placeholder="e.g. 10000" />
+              <Field label="Principal Amount (₹) *" value={principal} onChangeText={setPrincipal} keyboardType="number-pad" placeholder="e.g. 10000" />
               <Field label="Monthly Interest Rate (%) *" value={rate} onChangeText={setRate} keyboardType="decimal-pad" />
               <View style={{ gap: 8 }}>
-                <Text style={localStyles.metricLabel}>Duration Unit</Text>
+                <Text style={localStyles.metricLabel}>Loan Period Unit *</Text>
                 <Segmented options={["Days", "Weeks", "Months"]} value={durationUnit} onChange={setDurationUnit} />
               </View>
               <Field label={`Number of ${durationUnit} *`} value={durationValue} onChangeText={setDurationValue} keyboardType="number-pad" />
               <View style={{ gap: 8 }}>
-                <Text style={localStyles.metricLabel}>Collection Frequency</Text>
+                <Text style={localStyles.metricLabel}>Interest Collection *</Text>
                 <Segmented options={["Daily", "Weekly", "Monthly", "AtMaturity"]} value={collectionFreq} onChange={setCollectionFreq} />
               </View>
               <Field label="Start Date *" value={startDate} onChangeText={setStartDate} placeholder="YYYY-MM-DD" />
-              <Field label="Maturity Date" value={addLoanDuration(startDate, durationValue, durationUnit)} editable={false} />
+              <Field label="Maturity Date" value={maturityDate} editable={false} />
+              <Field label="First Interest Due" value={firstDueDate} editable={false} />
+              <Field label={collectionInterestLabel(collectionFreq)} value={formatCurrency(collectionInterest)} editable={false} />
+              <Field label="Estimated Total Interest" value={formatCurrency(totalInterest)} editable={false} />
+              <Card style={{ padding: 16, backgroundColor: colors.cyanSoft }}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <Text style={{ fontFamily: fonts.medium, color: colors.muted }}>New outstanding</Text>
+                  <Text style={{ fontFamily: fonts.bold, fontSize: 18, color: colors.dark }}>
+                    {formatCurrency(toNumber(customer.outstanding) + principalAmount)}
+                  </Text>
+                </View>
+              </Card>
+              <Pressable onPress={() => setAdminCollectionMonitoring(value => !value)} style={{ flexDirection: "row", alignItems: "flex-start", gap: 12, padding: 14, borderWidth: 1, borderColor: adminCollectionMonitoring ? colors.cyan : colors.border, borderRadius: radii.md, backgroundColor: adminCollectionMonitoring ? colors.cyanSoft : colors.white }}>
+                <Ionicons name={adminCollectionMonitoring ? "checkbox" : "square-outline"} size={23} color={adminCollectionMonitoring ? colors.cyan : colors.muted} />
+                <View style={{ flex: 1 }}><Text style={{ fontFamily: fonts.semibold, color: colors.dark }}>INRFS Admin collection monitoring</Text><Text style={{ fontFamily: fonts.regular, color: colors.muted, fontSize: 12, marginTop: 4 }}>Enable only if this loan should appear in the admin collection work queue.</Text></View>
+              </Pressable>
               <View style={{ flexDirection: "row", gap: 12, marginTop: 12 }}>
                 <Button style={{ flex: 1 }} label="Cancel" variant="secondary" onPress={close} disabled={busy} />
                 <Button style={{ flex: 1 }} label="Add Loan" onPress={() => void save()} loading={busy} />
@@ -623,7 +782,7 @@ function RecordPaymentModal({ customer, close, refreshList }: { customer: any, c
                     <Segmented options={activeLoans.map((l: any) => l.displayId || l.id).slice(0, 3)} value={activeLoans.find((l: any) => l.id === loanId)?.displayId || activeLoans.find((l: any) => l.id === loanId)?.id} onChange={(v) => { const l = activeLoans.find((al: any) => (al.displayId || al.id) === v); if (l) setLoanId(l.id); }} />
                   </View>
                   <Field label="Payment Date *" value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" />
-                  <Field label="Amount Received (â‚¹) *" value={amount} onChangeText={setAmount} keyboardType="number-pad" />
+                  <Field label="Amount Received (₹) *" value={amount} onChangeText={setAmount} keyboardType="number-pad" />
                   <View style={{ gap: 8 }}>
                     <Text style={localStyles.metricLabel}>Payment Type</Text>
                     <Segmented options={["Interest", "Principal", "Principal + Interest"]} value={type} onChange={setType} />
@@ -662,6 +821,7 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [dob, setDob] = useState("");
+  const [showDobPicker, setShowDobPicker] = useState(false);
   const [gender, setGender] = useState("Other");
   const [houseNumber, setHouseNumber] = useState("");
   const [street, setStreet] = useState("");
@@ -675,28 +835,50 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
   const [panDoc, setPanDoc] = useState<any>(null);
   const [addressProof, setAddressProof] = useState<any>(null);
   const [photograph, setPhotograph] = useState<any>(null);
+  const [otherDocuments, setOtherDocuments] = useState<any>(null);
+
+  const formForValidation = { name, phone, email, dob, city, stateName, pinCode, aadhaar, pan };
+  const maximumBirthDate = useMemo(() => {
+    const date = new Date();
+    date.setFullYear(date.getFullYear() - 18);
+    return date;
+  }, []);
+  const selectedBirthDate = dob ? new Date(`${dob}T12:00:00`) : new Date(1990, 0, 1);
+  const selectBirthDate = (_event: DateTimePickerEvent, date?: Date) => {
+    setShowDobPicker(false);
+    if (!date) return;
+    setDob(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`);
+  };
+
+  const next = (targetStep: number) => {
+    const error = validateCustomerStep(step, formForValidation);
+    if (error) return Alert.alert("Check customer details", error);
+    setStep(targetStep);
+  };
 
   const save = async () => {
-    if (!name.trim() || !phone.trim() || !city.trim() || !stateName.trim() || !pinCode.trim()) {
-      return Alert.alert("Missing Fields", "Please complete all required fields.");
+    for (const validationStep of [1, 2, 3]) {
+      const error = validateCustomerStep(validationStep, formForValidation);
+      if (error) return Alert.alert("Check customer details", error);
     }
     setBusy(true);
     try {
+      const mobile = normalizeIndianMobile(phone);
       const created = await platformApi.customers.create({
         fullName: name.trim(),
         dateOfBirth: dob || null,
         gender,
-        phone: phone.trim(),
-        email: email.trim() || null,
-        addressLine1: `${houseNumber} ${street}`.trim(),
-        addressLine2: area.trim(),
+        phone: mobile,
+        email: email.trim().toLowerCase() || null,
+        addressLine1: [houseNumber.trim(), street.trim()].filter(Boolean).join(', ') || area.trim(),
+        addressLine2: area.trim() || null,
         city: city.trim(),
         state: stateName.trim(),
         postalCode: pinCode.trim(),
-        aadhaar: aadhaar.trim() || null,
-        pan: pan.trim() || null
+        aadhaar: aadhaar.replace(/\D/g, '') || null,
+        pan: pan.trim().toUpperCase() || null
       });
-      const uploads = [[aadhaarDoc, "Aadhaar"], [panDoc, "Pan"], [addressProof, "AddressProof"], [photograph, "Photograph"]].filter(([doc]) => doc !== null);
+      const uploads = [[aadhaarDoc, "Aadhaar"], [panDoc, "Pan"], [addressProof, "AddressProof"], [photograph, "Photograph"], [otherDocuments, "Other"]].filter(([doc]) => doc !== null);
       await Promise.all(uploads.map(([doc, category]) => uploadPickedDocument(doc, category as string, { customerId: created.id })));
       await onSaved();
     } catch (e) {
@@ -710,7 +892,7 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
     try {
       const doc = await pickDocument();
       if (doc) setter(doc);
-    } catch (e) {
+    } catch {
       Alert.alert("Picker Error", "Could not select document.");
     }
   };
@@ -726,10 +908,17 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
               <Field label="Full name *" value={name} onChangeText={setName} />
               <Field label="Mobile *" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
               <Field label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-              <Field label="Date of birth" value={dob} onChangeText={setDob} placeholder="YYYY-MM-DD" />
+              <View style={{ gap: 7 }}>
+                <Text style={localStyles.dateLabel}>Date of birth *</Text>
+                <Pressable onPress={() => setShowDobPicker(true)} style={({ pressed }) => [localStyles.datePickerField, pressed && { opacity: 0.75 }]}>
+                  <Text style={[localStyles.datePickerText, !dob && { color: colors.subtle }]}>{dob || "Select date of birth"}</Text>
+                  <Ionicons name="calendar-outline" size={21} color={colors.cyan} />
+                </Pressable>
+                {showDobPicker ? <DateTimePicker value={selectedBirthDate} mode="date" display={Platform.OS === "ios" ? "spinner" : "calendar"} minimumDate={new Date(1900, 0, 1)} maximumDate={maximumBirthDate} onChange={selectBirthDate} /> : null}
+              </View>
               <View style={{ gap: 8 }}><Text style={localStyles.metricLabel}>Gender</Text><Segmented options={["Male", "Female", "Other"]} value={gender} onChange={setGender} /></View>
             </View>
-            <Button label="Next: Address" onPress={() => setStep(2)} style={{ marginTop: 20 }} />
+            <Button label="Next: Address" onPress={() => next(2)} style={{ marginTop: 20 }} />
           </Card>
         )}
         {step === 2 && (
@@ -745,7 +934,7 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
             </View>
             <View style={{ flexDirection: "row", marginTop: 20, gap: 12 }}>
               <Button style={{ flex: 1 }} label="Back" variant="secondary" onPress={() => setStep(1)} />
-              <Button style={{ flex: 1 }} label="Next: KYC" onPress={() => setStep(3)} />
+              <Button style={{ flex: 1 }} label="Next: KYC" onPress={() => next(3)} />
             </View>
           </Card>
         )}
@@ -758,7 +947,7 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
             </View>
             <View style={{ flexDirection: "row", marginTop: 20, gap: 12 }}>
               <Button style={{ flex: 1 }} label="Back" variant="secondary" onPress={() => setStep(2)} />
-              <Button style={{ flex: 1 }} label="Next: Documents" onPress={() => setStep(4)} />
+              <Button style={{ flex: 1 }} label="Next: Documents" onPress={() => next(4)} />
             </View>
           </Card>
         )}
@@ -771,6 +960,7 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
               <Button label={panDoc ? `Selected: ${panDoc.name}` : "Select PAN Document"} variant="secondary" onPress={() => void handlePick(setPanDoc)} />
               <Button label={addressProof ? `Selected: ${addressProof.name}` : "Select Address Proof"} variant="secondary" onPress={() => void handlePick(setAddressProof)} />
               <Button label={photograph ? `Selected: ${photograph.name}` : "Select Photograph"} variant="secondary" onPress={() => void handlePick(setPhotograph)} />
+              <Button label={otherDocuments ? `Selected: ${otherDocuments.name}` : "Select Other Document"} variant="secondary" onPress={() => void handlePick(setOtherDocuments)} />
             </View>
             <View style={{ flexDirection: "row", marginTop: 20, gap: 12 }}>
               <Button style={{ flex: 1 }} label="Back" variant="secondary" onPress={() => setStep(3)} disabled={busy} />
@@ -790,5 +980,8 @@ const localStyles = StyleSheet.create({
   avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.cyanSoft, alignItems: "center", justifyContent: "center" },
   avatarText: { color: colors.cyan, fontFamily: fonts.bold, fontSize: 18 },
   metricLabel: { color: colors.muted, fontFamily: fonts.medium, fontSize: 12, marginBottom: 4 },
-  metricValue: { color: colors.dark, fontFamily: fonts.bold, fontSize: 14 }
+  metricValue: { color: colors.dark, fontFamily: fonts.bold, fontSize: 14 },
+  dateLabel: { color: colors.dark, fontFamily: fonts.semibold, fontSize: 13 },
+  datePickerField: { minHeight: 54, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, backgroundColor: colors.white, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  datePickerText: { color: colors.dark, fontFamily: fonts.regular, fontSize: 14 }
 });

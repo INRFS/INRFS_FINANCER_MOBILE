@@ -9,7 +9,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [showWelcome, setShowWelcome] = useState(false);
   const logout = useCallback(async () => { try { if (tokenStore.access()) await api.post("/auth/revoke", {}, { retryAuth: false }); } catch {} finally { await tokenStore.clear(); setUser(null); } }, []);
   useEffect(() => { tokenStore.onExpired(() => setUser(null)); void (async () => { try { await tokenStore.restore(); if (tokenStore.access() || tokenStore.refresh()) setUser(await api.get("/auth/me")); } catch { await tokenStore.clear(); } finally { setLoading(false); } })(); }, []);
-  const completeLogin = useCallback(async (tokens: TokenResponse) => { await tokenStore.save(tokens); setShowWelcome(true); setUser(tokens.user); }, []);
+  const completeLogin = useCallback(async (tokens: TokenResponse) => {
+    if (!tokens || typeof tokens.accessToken !== "string" || !tokens.accessToken.trim() ||
+        typeof tokens.refreshToken !== "string" || !tokens.refreshToken.trim()) {
+      throw new Error("The server returned an invalid login response. Please try again.");
+    }
+
+    await tokenStore.save(tokens);
+    try {
+      const verifiedUser = await api.get("/auth/me", { retryAuth: false });
+      const verifiedId = verifiedUser?.userId ?? verifiedUser?.id;
+      if (!verifiedId || !Array.isArray(verifiedUser.roles)) {
+        throw new Error("The authenticated account could not be verified.");
+      }
+      const authenticatedUser: AuthUser = {
+        ...tokens.user,
+        id: String(verifiedId),
+        financerId: verifiedUser.financerId ?? tokens.user?.financerId ?? null,
+        roles: verifiedUser.roles,
+      };
+      setShowWelcome(true);
+      setUser(authenticatedUser);
+    } catch (error) {
+      await tokenStore.clear();
+      setUser(null);
+      throw error;
+    }
+  }, []);
   const dismissWelcome = useCallback(() => setShowWelcome(false), []);
   const updateUser = useCallback((fields: Partial<AuthUser>) => setUser(current => current ? { ...current, ...fields } : current), []);
   const value = useMemo(() => ({ user, loading, showWelcome, completeLogin, dismissWelcome, updateUser, logout, hasRole: (...roles: string[]) => roles.some((role) => user?.roles?.includes(role)) }), [user, loading, showWelcome, completeLogin, dismissWelcome, updateUser, logout]);

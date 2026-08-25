@@ -6,7 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Logo } from "../../components/Logo";
 import { Badge, Button, Card, DataRow, Field, Grid, Header, IconBubble, KpiCard, Screen, SectionTitle, Segmented } from "../../components/ui";
-import { customerLedgers, customers, dashboardStats, duePayments, financerProfile, interestSchedules, ledger, loanStatus, loans, monthlyCollections, notifications, overdueAccounts, payments, supportTickets } from "../../data/mock";
+import { customers, dashboardStats, duePayments, financerProfile, interestSchedules, ledger, loanStatus, loans, monthlyCollections, notifications, overdueAccounts, payments, supportTickets } from "../../data/mock";
 import { colors, fonts, radii, shadows } from "../../theme/tokens";
 import type { Accent, RootStackParamList, Status } from "../../types/navigation";
 import { pageItems, platformApi } from "../../services/platformApi";

@@ -1,6 +1,8 @@
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
+import * as IntentLauncher from "expo-intent-launcher";
 import * as Sharing from "expo-sharing";
+import { Platform } from "react-native";
 
 import { API_BASE_URL } from "../config/environment";
 import { tokenStore } from "./apiClient";
@@ -39,7 +41,43 @@ export async function downloadAndShareDocument(id: string, originalFileName = "d
   const result = await FileSystem.downloadAsync(`${API_BASE_URL}/documents/${id}/content`, target, {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
+  if (result.status === 404) {
+    throw new Error("The document record exists, but its stored file is unavailable. Please upload the document again or restore the server document storage.");
+  }
   if (result.status < 200 || result.status >= 300) throw new Error(`Document download failed (${result.status}).`);
-  if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(result.uri, { dialogTitle: safeName });
+
+  const extension = safeName.split(".").pop()?.toLowerCase() ?? "";
+  const mimeType = ({
+    pdf: "application/pdf",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    webp: "image/webp",
+    doc: "application/msword",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    xls: "application/vnd.ms-excel",
+    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    txt: "text/plain",
+  } as Record<string, string>)[extension] ?? "application/octet-stream";
+
+  if (Platform.OS === "android") {
+    try {
+      const contentUri = await FileSystem.getContentUriAsync(result.uri);
+      await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
+        data: contentUri,
+        flags: 1,
+        type: mimeType,
+      });
+      return result.uri;
+    } catch {
+      // Some Android devices have no viewer for a given file type; offer sharing as a fallback.
+    }
+  }
+
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(result.uri, { dialogTitle: `Open ${safeName}`, mimeType });
+  } else {
+    throw new Error("No application is available to open this document.");
+  }
   return result.uri;
 }

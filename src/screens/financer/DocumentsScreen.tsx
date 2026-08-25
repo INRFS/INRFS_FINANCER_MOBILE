@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { View, Text, Alert } from "react-native";
-import { Card, Header, Screen, Button, Segmented } from "../../components/ui";
+import { Card, Button, Segmented } from "../../components/ui";
 import { platformApi } from "../../services/platformApi";
+import { downloadAndShareDocument } from "../../services/nativeDocuments";
 import { s } from "./styles";
 import * as DocumentPicker from "expo-document-picker";
 
@@ -62,12 +63,8 @@ export function DocumentsScreen({ customerId }: { customerId?: string }) {
   };
 
   const downloadDoc = async (doc: any) => {
-    try {
-      Alert.alert("Downloading", `Opening native viewer for ${doc.originalFileName}`);
-      // Native download integration goes here
-    } catch (e) {
-      Alert.alert("Error", "Could not download document");
-    }
+    try { await downloadAndShareDocument(doc.id, doc.originalFileName); }
+    catch (reason) { Alert.alert("Open failed", reason instanceof Error ? reason.message : "Could not open document"); }
   };
 
   if (!customerId) {
@@ -79,7 +76,7 @@ export function DocumentsScreen({ customerId }: { customerId?: string }) {
       <Card>
         <Text style={s.label}>Upload New Document</Text>
         <Segmented 
-          options={["Aadhaar", "PAN", "Address Proof", "Photograph", "Other"]} 
+          options={["Aadhaar", "Pan", "AddressProof", "Photograph", "Other"]}
           value={category} 
           onChange={setCategory} 
         />

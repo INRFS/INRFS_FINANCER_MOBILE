@@ -81,6 +81,7 @@ export const iconMap = {
   "download-outline": Download,
   "eye-off-outline": EyeOff,
   "eye-outline": Eye,
+  "folder-outline": FolderOpen,
   "folder-open-outline": FolderOpen,
   "grid-outline": Grid2X2,
   "headset-outline": Headphones,
@@ -111,13 +112,13 @@ export const iconMap = {
 export type IconName = keyof typeof iconMap;
 
 type Props = {
-  name: IconName;
+  name: IconName | string;
   size?: number;
   color?: string;
 };
 
 function AppIcon({ name, size = 24, color = "currentColor" }: Props) {
-  const Icon = iconMap[name];
+  const Icon = iconMap[name as IconName] ?? Info;
   return <Icon size={size} color={color} strokeWidth={2} />;
 }
 
