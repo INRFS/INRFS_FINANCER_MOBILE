@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, FlatList, Text, View, Modal, Pressable, StyleSheet, ActivityIndicator } from "react-native";
+import { Alert, FlatList, Text, View, Modal, Pressable, StyleSheet, ActivityIndicator, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Button, Card, Field, Header, Screen } from "../../components/ui";
+import { Button, Card, Header, Screen } from "../../components/ui";
 import { pageItems, platformApi } from "../../services/platformApi";
 import { s } from "./styles";
 import { Ionicons } from "../../components/AppIcon";
@@ -239,32 +239,40 @@ export function LedgerScreen() {
 
       <Modal visible={isCustomerSheetOpen} transparent animationType="slide" onRequestClose={() => setIsCustomerSheetOpen(false)}>
         <View style={s.overlay}>
-          <SafeAreaView edges={["bottom", "top"]} style={s.sheet}>
-            <View style={s.between}>
-              <Text style={s.sheetTitle}>Select Customer</Text>
-              <Pressable onPress={() => setIsCustomerSheetOpen(false)} style={{ padding: 5 }}><Ionicons name="close" size={25} /></Pressable>
+          <SafeAreaView edges={["bottom"]} style={styles.customerSheet}>
+            <View style={styles.customerSheetHeader}>
+              <View style={styles.customerSheetHeading}>
+                <Text style={styles.customerSheetTitle}>Select Customer</Text>
+                <Text style={styles.customerSheetSubtitle}>Choose a customer to view their ledger</Text>
+              </View>
+              <Pressable accessibilityRole="button" accessibilityLabel="Close customer selector" hitSlop={8} onPress={() => setIsCustomerSheetOpen(false)} style={styles.customerSheetClose}><Ionicons name="close" size={22} color={colors.dark} /></Pressable>
             </View>
             
-            <View style={{ padding: 20, paddingBottom: 10 }}>
+            <View style={styles.searchArea}>
               <View style={styles.searchBox}>
-                <Ionicons name="search" size={18} color={colors.muted} />
-                <Field 
-                  label="" 
+                <Ionicons name="search-outline" size={21} color={colors.muted} />
+                <TextInput
                   value={customerSearch} 
                   onChangeText={setCustomerSearch} 
                   placeholder="Search customers..." 
-                  style={{ flex: 1, marginTop: -7, marginBottom: -7, borderBottomWidth: 0, backgroundColor: 'transparent' }} 
+                  placeholderTextColor={colors.subtle}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={styles.searchInput}
                 />
+                {customerSearch ? <Pressable accessibilityLabel="Clear customer search" onPress={() => setCustomerSearch("")}><Ionicons name="close-circle" size={20} color={colors.subtle}/></Pressable> : null}
               </View>
             </View>
             
             <FlatList 
               data={filteredCustomers}
               keyExtractor={c => c.id}
-              contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.customerList}
               renderItem={({ item }) => (
                 <Pressable 
-                  style={({ pressed }) => [styles.sheetRow, pressed && { backgroundColor: colors.background }, selectedId === item.id && { backgroundColor: '#f0f9ff' }]}
+                  style={({ pressed }) => [styles.sheetRow, selectedId === item.id && styles.sheetRowSelected, pressed && styles.sheetRowPressed]}
                   onPress={() => {
                     if (selectedId !== item.id) {
                       setLedgerData({ customer: item, entries: [] }); 
@@ -280,7 +288,7 @@ export function LedgerScreen() {
                     <Text style={[s.title, selectedId === item.id && { color: colors.cyan }]}>{item.fullName}</Text>
                     <Text style={s.meta}>{item.customerNumber} · {item.phone}</Text>
                   </View>
-                  {selectedId === item.id && <Ionicons name="checkmark-done-outline" size={20} color={colors.cyan} />}
+                  <Ionicons name={selectedId === item.id ? "checkmark-circle" : "chevron-forward"} size={21} color={selectedId === item.id ? colors.cyan : colors.subtle} />
                 </Pressable>
               )}
               ListEmptyComponent={<Text style={[s.muted, { textAlign: 'center', marginTop: 20 }]}>No customers found</Text>}
@@ -294,6 +302,14 @@ export function LedgerScreen() {
 }
 
 const styles = StyleSheet.create({
+  customerSheet: { maxHeight: "78%", minHeight: 330, backgroundColor: colors.white, borderTopLeftRadius: 26, borderTopRightRadius: 26, overflow: "hidden" },
+  customerSheetHeader: { minHeight: 84, paddingHorizontal: 20, paddingVertical: 17, flexDirection: "row", alignItems: "center", gap: 14, borderBottomWidth: 1, borderBottomColor: colors.border },
+  customerSheetHeading: { flex: 1, gap: 3 },
+  customerSheetTitle: { color: colors.dark, fontFamily: fonts.bold, fontSize: 20 },
+  customerSheetSubtitle: { color: colors.muted, fontFamily: fonts.regular, fontSize: 12 },
+  customerSheetClose: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
+  searchArea: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8 },
+  customerList: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 28, gap: 8 },
   exportBtn: {
     width: 36,
     height: 36,
@@ -407,15 +423,26 @@ const styles = StyleSheet.create({
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f1f5f9',
-    borderRadius: radii.md,
-    paddingHorizontal: 12,
+    minHeight: 52,
+    gap: 10,
+    backgroundColor: colors.background,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
   },
+  searchInput: { flex: 1, paddingVertical: 0, color: colors.dark, fontFamily: fonts.regular, fontSize: 15 },
   sheetRow: {
+    minHeight: 76,
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 14,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  }
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 15,
+    backgroundColor: colors.white,
+  },
+  sheetRowSelected: { borderColor: colors.cyan, backgroundColor: colors.cyanSoft },
+  sheetRowPressed: { opacity: 0.78 },
 });

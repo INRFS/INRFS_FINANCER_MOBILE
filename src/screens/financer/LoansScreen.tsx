@@ -8,7 +8,7 @@ import { RemoteState, useRemote } from "./shared";
 import { s } from "./styles";
 import { Ionicons } from "../../components/AppIcon";
 import { colors, fonts } from "../../theme/tokens";
-import { interestForDays, rateForDays, monthlyPeriodDays, formatInterestAmount } from "./loanInterest";
+import { interestForDays, rateForDays, formatInterestAmount } from "./loanInterest";
 
 const rupees = (v: unknown) => `₹${Number(v ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 const dateOnly = () => new Date().toISOString().slice(0, 10);
@@ -204,9 +204,9 @@ export function LoansScreen() {
 function AddLoanWizard({ customers, products, onCancel, onSaved }: { customers: any[], products: any[], onCancel: () => void, onSaved: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const [customerId, setCustomerId] = useState("");
-  const [principal, setPrincipal] = useState("10000");
-  const [rate, setRate] = useState("18");
-  const [duration, setDuration] = useState("13");
+  const [principal, setPrincipal] = useState("0");
+  const [rate, setRate] = useState("0");
+  const [duration, setDuration] = useState("0");
   const [durationUnit, setDurationUnit] = useState("Days");
   const [frequency, setFrequency] = useState("Daily");
   const [startDate, setStartDate] = useState(dateOnly());
@@ -222,15 +222,13 @@ function AddLoanWizard({ customers, products, onCancel, onSaved }: { customers: 
   
   const amountNum = Number(principal) || 0;
   const rateNum = Number(rate) || 0;
-  const monthlyDays = monthlyPeriodDays(startDate);
-
   const dailyRate = rateForDays(rateNum, 1);
   const weeklyRate = rateForDays(rateNum, 7);
-  const monthlyRate = rateForDays(rateNum, monthlyDays);
+  const monthlyRate = rateNum;
 
   const dailyAmount = interestForDays(amountNum, rateNum, 1);
   const weeklyAmount = interestForDays(amountNum, rateNum, 7);
-  const monthlyAmount = interestForDays(amountNum, rateNum, monthlyDays);
+  const monthlyAmount = Math.round((amountNum * rateNum / 100 + Number.EPSILON) * 100) / 100;
 
   const totalDays = dateDays(startDate, maturityDate);
   const estimatedTotalInterest = interestForDays(amountNum, rateNum, totalDays);
@@ -342,24 +340,33 @@ function AddLoanWizard({ customers, products, onCancel, onSaved }: { customers: 
 
       <Modal visible={isCustomerSelectorOpen} transparent animationType="slide" onRequestClose={() => setIsCustomerSelectorOpen(false)}>
         <View style={s.overlay}>
-          <SafeAreaView edges={["bottom", "top"]} style={s.sheet}>
-            <View style={s.between}>
-              <Text style={s.sheetTitle}>Select Customer</Text>
-              <Pressable onPress={() => setIsCustomerSelectorOpen(false)}><Ionicons name="close" size={25} /></Pressable>
+          <SafeAreaView edges={["bottom"]} style={styles.customerSheet}>
+            <View style={styles.customerSheetHeader}>
+              <View style={styles.customerSheetHeading}>
+                <Text style={styles.customerSheetTitle}>Select Customer</Text>
+                <Text style={styles.customerSheetSubtitle}>Choose a customer for this loan</Text>
+              </View>
+              <Pressable accessibilityRole="button" accessibilityLabel="Close customer selector" hitSlop={8} style={styles.customerSheetClose} onPress={() => setIsCustomerSelectorOpen(false)}><Ionicons name="close" size={22} color={colors.dark} /></Pressable>
             </View>
             <FlatList
               data={customers}
               keyExtractor={x => x.id}
-              contentContainerStyle={{ padding: 20, gap: 10 }}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.customerList}
               renderItem={({ item }) => (
-                <Pressable style={{ padding: 15, backgroundColor: "#f8fafc", borderRadius: 10, borderWidth: 1, borderColor: "#e2e8f0" }} onPress={() => {
+                <Pressable style={[styles.customerOption, customerId === item.id && styles.customerOptionSelected]} onPress={() => {
                   setCustomerId(item.id);
                   setIsCustomerSelectorOpen(false);
                 }}>
-                  <Text style={{ fontFamily: fonts.semibold, fontSize: 16 }}>{item.fullName}</Text>
+                  <View style={styles.customerAvatar}><Text style={styles.customerAvatarText}>{String(item.fullName || "C").trim().charAt(0).toUpperCase()}</Text></View>
+                  <View style={styles.customerOptionContent}>
+                  <Text numberOfLines={1} style={styles.customerOptionName}>{item.fullName}</Text>
                   <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.muted }}>{item.phone} · {item.customerNumber}</Text>
+                  </View>
+                  <Ionicons name={customerId === item.id ? "checkmark-circle" : "chevron-forward"} size={21} color={customerId === item.id ? colors.cyan : colors.subtle} />
                 </Pressable>
               )}
+              ListEmptyComponent={<View style={styles.customerEmpty}><Ionicons name="people-outline" size={32} color={colors.subtle}/><Text style={styles.customerSheetSubtitle}>No customers available</Text></View>}
             />
           </SafeAreaView>
         </View>
@@ -369,6 +376,21 @@ function AddLoanWizard({ customers, products, onCancel, onSaved }: { customers: 
 }
 
 const styles = StyleSheet.create({
+  customerSheet: { maxHeight: "72%", minHeight: 230, backgroundColor: colors.white, borderTopLeftRadius: 26, borderTopRightRadius: 26, overflow: "hidden" },
+  customerSheetHeader: { minHeight: 84, paddingHorizontal: 20, paddingVertical: 17, flexDirection: "row", alignItems: "center", gap: 14, borderBottomWidth: 1, borderBottomColor: colors.border },
+  customerSheetHeading: { flex: 1, gap: 3 },
+  customerSheetTitle: { color: colors.dark, fontFamily: fonts.bold, fontSize: 20 },
+  customerSheetSubtitle: { color: colors.muted, fontFamily: fonts.regular, fontSize: 12 },
+  customerSheetClose: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
+  customerList: { padding: 16, paddingBottom: 24, gap: 10 },
+  customerOption: { minHeight: 76, paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.white, borderRadius: 15, borderWidth: 1, borderColor: colors.border },
+  customerOptionSelected: { borderColor: colors.cyan, backgroundColor: colors.cyanSoft },
+  customerAvatar: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: colors.cyanSoft },
+  customerAvatarText: { color: colors.cyan, fontFamily: fonts.bold, fontSize: 16 },
+  customerOptionContent: { flex: 1, gap: 4 },
+  customerOptionName: { color: colors.dark, fontFamily: fonts.semibold, fontSize: 16 },
+  customerOptionMeta: { color: colors.muted, fontFamily: fonts.regular, fontSize: 12 },
+  customerEmpty: { minHeight: 130, alignItems: "center", justifyContent: "center", gap: 10 },
   previewCard: {
     minWidth: 140,
     minHeight: 65,

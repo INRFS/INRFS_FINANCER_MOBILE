@@ -1,11 +1,12 @@
-export function interestForDays(principal: number | string, annualRate: number | string, days: number): number {
+/** Prorates an entered monthly percentage using the product's 30-day month convention. */
+export function interestForDays(principal: number | string, monthlyRate: number | string, days: number): number {
   const amount = Number(principal) || 0;
-  const rate = Number(annualRate) || 0;
-  return Math.round((amount * rate / 100 * days / 365 + Number.EPSILON) * 100) / 100;
+  const rate = Number(monthlyRate) || 0;
+  return Math.round((amount * rate / 100 * days / 30 + Number.EPSILON) * 100) / 100;
 }
 
-export function rateForDays(annualRate: number | string, days: number): number {
-  return (Number(annualRate) || 0) * days / 365;
+export function rateForDays(monthlyRate: number | string, days: number): number {
+  return (Number(monthlyRate) || 0) * days / 30;
 }
 
 export function monthlyPeriodDays(startDate: string): number {

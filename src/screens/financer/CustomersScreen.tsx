@@ -74,7 +74,7 @@ const collectionInterestLabel = (frequency: string) => ({
 }[frequency] || 'Estimated Collection Interest');
 
 const monthlyInterestForDays = (principal: number, monthlyRate: number, days: number) =>
-  principal * monthlyRate / 100 * 12 * days / 365;
+  principal * monthlyRate / 100 * days / 30;
 
 const normalizeIndianMobile = (value: string) => {
   const digits = value.replace(/\D/g, '');
@@ -100,13 +100,14 @@ const validateCustomerStep = (step: number, form: {
 }) => {
   if (step === 1) {
     if (!form.name.trim()) return 'Full name is required.';
+    if (form.name.trim().length < 2 || form.name.trim().length > 100) return 'Full name must contain between 2 and 100 characters.';
     if (!/^[6-9]\d{9}$/.test(normalizeIndianMobile(form.phone))) return 'Enter a valid 10-digit Indian mobile number.';
-    if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return 'Enter a valid email address.';
+    if (form.email.trim().length > 254 || (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))) return 'Enter a valid email address.';
     if (!isValidAdultDate(form.dob)) return 'Customer must have a valid date of birth and be at least 18 years old.';
   }
   if (step === 2) {
-    if (!form.city.trim()) return 'City is required.';
-    if (!form.stateName.trim()) return 'State is required.';
+    if (!form.city.trim() || form.city.trim().length > 100) return 'City is required and must not exceed 100 characters.';
+    if (!form.stateName.trim() || form.stateName.trim().length > 100) return 'State is required and must not exceed 100 characters.';
     if (!/^[1-9]\d{5}$/.test(form.pinCode.trim())) return 'Enter a valid 6-digit Indian PIN code.';
   }
   if (step === 3) {
@@ -355,7 +356,21 @@ function CustomerDetailsModal({ customer, products, initialEdit = false, close, 
       </View>
 
       {isEditCustomerOpen && <EditCustomerModal customer={detailsCustomer} close={() => setIsEditCustomerOpen(false)} refreshList={refreshList} onUpdated={setDetailsCustomer} />}
-      {isAddLoanOpen && <AddLoanModal customer={detailsCustomer} products={products} close={() => setIsAddLoanOpen(false)} refreshList={refreshList} />}
+      {isAddLoanOpen && <AddLoanModal
+        customer={detailsCustomer}
+        products={products}
+        close={() => setIsAddLoanOpen(false)}
+        onCreated={(loan) => {
+          setDetailsCustomer((current: any) => ({
+            ...current,
+            loans: [...(current.loans || []).filter((item: any) => item.id !== loan.id), loan],
+            activeLoans: Number(current.activeLoans ?? 0) + 1,
+            outstanding: Number(current.outstanding ?? 0) + Number(loan.principalOutstanding ?? loan.principal ?? 0),
+          }));
+          setTab("Loans");
+          refreshList();
+        }}
+      />}
       {isPaymentOpen && <RecordPaymentModal customer={detailsCustomer} close={() => setIsPaymentOpen(false)} refreshList={refreshList} />}
     </Modal>
   );
@@ -548,15 +563,12 @@ function EditCustomerModal({ customer, close, refreshList, onUpdated }: { custom
   const pan = customer.panMasked || customer.pan || "";
 
   const save = async () => {
-    const mobile = phone.replace(/\D/g, '').replace(/^91(?=\d{10}$)/, '');
-    if (!name.trim()) return Alert.alert("Invalid name", "Full name is required.");
-    if (!/^[6-9]\d{9}$/.test(mobile)) return Alert.alert("Invalid mobile", "Enter a valid 10-digit Indian mobile number.");
-    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return Alert.alert("Invalid email", "Enter a valid email address.");
-    const birthDate = new Date(`${dob}T00:00:00`);
-    const adultCutoff = new Date(); adultCutoff.setFullYear(adultCutoff.getFullYear() - 18);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dob) || Number.isNaN(birthDate.getTime()) || birthDate > adultCutoff) return Alert.alert("Invalid birth date", "Customer must have a valid date of birth and be at least 18 years old.");
-    if (!city.trim() || !stateName.trim()) return Alert.alert("Missing address", "City and state are required.");
-    if (!/^[1-9]\d{5}$/.test(pinCode.trim())) return Alert.alert("Invalid PIN", "Enter a valid 6-digit Indian PIN code.");
+    const validationForm = { name, phone, email, dob, city, stateName, pinCode, aadhaar: "", pan: "" };
+    for (const validationStep of [1, 2]) {
+      const error = validateCustomerStep(validationStep, validationForm);
+      if (error) return Alert.alert("Check customer details", error);
+    }
+    const mobile = normalizeIndianMobile(phone);
     setBusy(true);
     try {
       const updated = await platformApi.customers.update(customer.id, {
@@ -593,9 +605,9 @@ function EditCustomerModal({ customer, close, refreshList, onUpdated }: { custom
               <Pressable onPress={close}><Ionicons name="close" size={24} color={colors.subtle} /></Pressable>
             </View>
             <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
-              <Field label="Full Name *" value={name} onChangeText={setName} />
-              <Field label="Mobile Number *" value={phone} onChangeText={setPhone} keyboardType="phone-pad" maxLength={13} />
-              <Field label="Email Address" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+              <Field label="Full Name *" value={name} onChangeText={setName} maxLength={100} />
+              <Field label="Mobile Number *" value={phone} onChangeText={value => setPhone(value.replace(/[^\d+]/g, ""))} keyboardType="phone-pad" maxLength={13} />
+              <Field label="Email Address" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" maxLength={254} />
               <Field label="Date of Birth *" value={dob} onChangeText={setDob} placeholder="YYYY-MM-DD" />
               <View style={{ gap: 8 }}>
                 <Text style={localStyles.metricLabel}>Gender</Text>
@@ -604,9 +616,9 @@ function EditCustomerModal({ customer, close, refreshList, onUpdated }: { custom
               <Field label="House / Flat Number" value={houseNumber} onChangeText={setHouseNumber} />
               <Field label="Street" value={street} onChangeText={setStreet} />
               <Field label="Area" value={area} onChangeText={setArea} />
-              <Field label="City *" value={city} onChangeText={setCity} />
-              <Field label="State *" value={stateName} onChangeText={setStateName} />
-              <Field label="PIN Code *" value={pinCode} onChangeText={setPinCode} keyboardType="number-pad" maxLength={6} />
+              <Field label="City *" value={city} onChangeText={setCity} maxLength={100} />
+              <Field label="State *" value={stateName} onChangeText={setStateName} maxLength={100} />
+              <Field label="PIN Code *" value={pinCode} onChangeText={value => setPinCode(value.replace(/\D/g, ""))} keyboardType="number-pad" maxLength={6} />
               <Field label="Aadhaar (identity changes require KYC)" value={aadhaar} editable={false} />
               <Field label="PAN (identity changes require KYC)" value={pan} editable={false} />
               <View style={{ flexDirection: "row", gap: 12, marginTop: 12 }}>
@@ -621,12 +633,12 @@ function EditCustomerModal({ customer, close, refreshList, onUpdated }: { custom
   );
 }
 
-function AddLoanModal({ customer, products, close, refreshList }: { customer: any, products: any[], close: () => void, refreshList: () => void }) {
+function AddLoanModal({ customer, products, close, onCreated }: { customer: any, products: any[], close: () => void, onCreated: (loan: any) => void }) {
   const product = products.find(x => x.isActive !== false) || products[0];
   const [busy, setBusy] = useState(false);
-  const [principal, setPrincipal] = useState("");
-  const [rate, setRate] = useState(String(product?.annualInterestRate ?? 18));
-  const [durationValue, setDurationValue] = useState("13");
+  const [principal, setPrincipal] = useState("0");
+  const [rate, setRate] = useState("0");
+  const [durationValue, setDurationValue] = useState("0");
   const [durationUnit, setDurationUnit] = useState("Days");
   const [collectionFreq, setCollectionFreq] = useState("Daily");
   const [startDate, setStartDate] = useState(todayISO());
@@ -636,7 +648,9 @@ function AddLoanModal({ customer, products, close, refreshList }: { customer: an
   const monthlyRate = toNumber(rate);
   const maturityDate = addLoanDuration(startDate, durationValue, durationUnit);
   const firstDueDate = firstInterestDue(startDate, collectionFreq, maturityDate);
-  const collectionInterest = monthlyInterestForDays(principalAmount, monthlyRate, dateDays(startDate, firstDueDate));
+  const collectionInterest = collectionFreq === 'Monthly'
+    ? principalAmount * monthlyRate / 100
+    : monthlyInterestForDays(principalAmount, monthlyRate, dateDays(startDate, firstDueDate));
   const totalInterest = monthlyInterestForDays(principalAmount, monthlyRate, dateDays(startDate, maturityDate));
 
   const save = async () => {
@@ -652,7 +666,7 @@ function AddLoanModal({ customer, products, close, refreshList }: { customer: an
       if (p < Number(product.minimumPrincipal) || p > Number(product.maximumPrincipal)) {
          throw new Error(`Principal must be between ${formatCurrency(product.minimumPrincipal)} and ${formatCurrency(product.maximumPrincipal)}`);
       }
-      await platformApi.loans.create({
+      const createdLoan = await platformApi.loans.create({
         customerId: customer.id,
         loanProductId: product.id,
         principal: p,
@@ -666,7 +680,7 @@ function AddLoanModal({ customer, products, close, refreshList }: { customer: an
         interestCollectionFrequency: collectionFreq,
         adminCollectionMonitoring
       });
-      refreshList();
+      onCreated(createdLoan);
       close();
     } catch (e) {
       Alert.alert("Error", e instanceof Error ? e.message : "Error saving");
@@ -905,9 +919,9 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
           <Card>
             <Text style={{ fontFamily: fonts.bold, fontSize: 16, marginBottom: 12 }}>Personal Information</Text>
             <View style={{ gap: 16 }}>
-              <Field label="Full name *" value={name} onChangeText={setName} />
-              <Field label="Mobile *" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-              <Field label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+              <Field label="Full name *" value={name} onChangeText={setName} maxLength={100} />
+              <Field label="Mobile *" value={phone} onChangeText={value => setPhone(value.replace(/[^\d+]/g, ""))} keyboardType="phone-pad" maxLength={13} />
+              <Field label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" maxLength={254} />
               <View style={{ gap: 7 }}>
                 <Text style={localStyles.dateLabel}>Date of birth *</Text>
                 <Pressable onPress={() => setShowDobPicker(true)} style={({ pressed }) => [localStyles.datePickerField, pressed && { opacity: 0.75 }]}>
@@ -928,9 +942,9 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
               <Field label="House Number" value={houseNumber} onChangeText={setHouseNumber} />
               <Field label="Street" value={street} onChangeText={setStreet} />
               <Field label="Area/Village" value={area} onChangeText={setArea} />
-              <Field label="City *" value={city} onChangeText={setCity} />
-              <Field label="State *" value={stateName} onChangeText={setStateName} />
-              <Field label="PIN Code *" value={pinCode} onChangeText={setPinCode} keyboardType="number-pad" />
+              <Field label="City *" value={city} onChangeText={setCity} maxLength={100} />
+              <Field label="State *" value={stateName} onChangeText={setStateName} maxLength={100} />
+              <Field label="PIN Code *" value={pinCode} onChangeText={value => setPinCode(value.replace(/\D/g, ""))} keyboardType="number-pad" maxLength={6} />
             </View>
             <View style={{ flexDirection: "row", marginTop: 20, gap: 12 }}>
               <Button style={{ flex: 1 }} label="Back" variant="secondary" onPress={() => setStep(1)} />
@@ -942,8 +956,8 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
           <Card>
             <Text style={{ fontFamily: fonts.bold, fontSize: 16, marginBottom: 12 }}>KYC Details</Text>
             <View style={{ gap: 16 }}>
-              <Field label="Aadhaar Number" value={aadhaar} onChangeText={setAadhaar} keyboardType="number-pad" />
-              <Field label="PAN" value={pan} onChangeText={setPan} autoCapitalize="characters" />
+              <Field label="Aadhaar Number" value={aadhaar} onChangeText={value => setAadhaar(value.replace(/\D/g, ""))} keyboardType="number-pad" maxLength={12} />
+              <Field label="PAN" value={pan} onChangeText={value => setPan(value.replace(/\s/g, "").toUpperCase())} autoCapitalize="characters" maxLength={10} />
             </View>
             <View style={{ flexDirection: "row", marginTop: 20, gap: 12 }}>
               <Button style={{ flex: 1 }} label="Back" variant="secondary" onPress={() => setStep(2)} />

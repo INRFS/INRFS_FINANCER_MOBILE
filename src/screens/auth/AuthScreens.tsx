@@ -12,6 +12,18 @@ import type { RootStackParamList } from "../../types/navigation";
 import { api } from "../../services/apiClient";
 import { useAuth } from "../../auth/AuthContext";
 
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const indianMobile = (value: string) => value.replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "");
+const validEmail = (value: string) => value.trim().length <= 254 && emailPattern.test(value.trim());
+const validPersonName = (value: string) => {
+  const trimmed = value.trim();
+  return trimmed.length >= 2 && trimmed.length <= 100 && /[A-Za-z]/.test(trimmed) && !/[0-9]/.test(trimmed);
+};
+const validPlace = (value: string) => {
+  const trimmed = value.trim();
+  return trimmed.length >= 2 && trimmed.length <= 100 && /[A-Za-z]/.test(trimmed) && !/[0-9]/.test(trimmed);
+};
+
 type PortalProps = NativeStackScreenProps<RootStackParamList, "PortalSelection">;
 export function PortalSelectionScreen({ navigation }: PortalProps) {
   return (
@@ -51,16 +63,17 @@ export function FinancerLoginScreen({ navigation }: LoginProps) {
   const [submitting, setSubmitting] = useState(false);
   const submit = async () => {
     if (forgotPassword) {
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(forgotEmail.trim())) return setError("Enter a valid email address.");
+      if (!validEmail(forgotEmail)) return setError("Enter a valid email address.");
       setSubmitting(true); setError("");
       try { await api.post("/auth/password/forgot", { email: forgotEmail.trim().toLowerCase() }, { auth: false }); setError("If this account exists, password reset instructions have been sent."); }
       catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Unable to request a password reset."); }
       finally { setSubmitting(false); }
       return;
     }
-    const digits = mobile.replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "");
+    const digits = indianMobile(mobile);
     if (!/^[6-9]\d{9}$/.test(digits)) return setError("Enter a valid 10-digit Indian mobile number.");
-    if (!password.trim()) return setError("Enter your password");
+    if (!password) return setError("Enter your password.");
+    if (password.length > 128) return setError("Password cannot exceed 128 characters.");
     setSubmitting(true); setError("");
     try {
       const tokens = await api.post("/auth/login/financer", { email: digits, password, portal: "financer" }, { auth: false });
@@ -81,20 +94,24 @@ export function FinancerRegisterScreen({ navigation }: RegisterProps) {
   const [form, setForm] = useState({ name: "", business: "", mobile: "", email: "", city: "", state: "" });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const update = (key: keyof typeof form, value: string) => setForm((old) => ({ ...old, [key]: value }));
+  const update = (key: keyof typeof form, value: string) => { setForm((old) => ({ ...old, [key]: value })); setError(""); };
   const submit = async () => {
-    if (Object.values(form).some((v) => !v.trim())) return setError("Complete all fields to continue");
-    const mobile = form.mobile.replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "");
+    if (Object.values(form).some((v) => !v.trim())) return setError("Complete all fields to continue.");
+    if (!validPersonName(form.name)) return setError("Enter a valid full name using 2 to 100 letters.");
+    if (form.business.trim().length < 2 || form.business.trim().length > 200) return setError("Business name must contain 2 to 200 characters.");
+    const mobile = indianMobile(form.mobile);
     if (!/^[6-9]\d{9}$/.test(mobile)) return setError("Enter a valid 10-digit Indian mobile number.");
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return setError("Enter a valid email address.");
+    if (!validEmail(form.email)) return setError("Enter a valid email address.");
+    if (!validPlace(form.city)) return setError("Enter a valid city using 2 to 100 letters.");
+    if (!validPlace(form.state)) return setError("Enter a valid state using 2 to 100 letters.");
     setSubmitting(true); setError("");
     try {
-      const challenge = await api.post("/auth/register/financer", { fullName: form.name.trim(), businessName: form.business.trim(), mobile: form.mobile.trim(), email: form.email.trim().toLowerCase(), city: form.city.trim(), state: form.state.trim() }, { auth: false });
+      const challenge = await api.post("/auth/register/financer", { fullName: form.name.trim(), businessName: form.business.trim(), mobile, email: form.email.trim().toLowerCase(), city: form.city.trim(), state: form.state.trim() }, { auth: false });
       navigation.navigate("FinancerOtp", { mobile: form.email.trim().toLowerCase(), challengeId: challenge.challengeId, registering: true });
     } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Unable to create the account."); }
     finally { setSubmitting(false); }
   };
-  return <AuthShell scroll><Logo size={46} /><View style={styles.authHeading}><Text style={styles.authTitle}>Create your INRFS account</Text><Text style={styles.authSub}>Join thousands of financers managing loans digitally</Text></View><Field label="Full Name" placeholder="Suresh Patel" value={form.name} onChangeText={(v) => update("name", v)} /><Field label="Business / Finance Name" placeholder="Patel Finance Services" value={form.business} onChangeText={(v) => update("business", v)} /><Field label="Mobile Number" placeholder="+91 98765 43210" keyboardType="phone-pad" value={form.mobile} onChangeText={(v) => update("mobile", v)} /><Field label="Email Address" placeholder="suresh@patelfinance.in" keyboardType="email-address" autoCapitalize="none" value={form.email} onChangeText={(v) => update("email", v)} /><Field label="City" placeholder="Ahmedabad" value={form.city} onChangeText={(v) => update("city", v)} /><Field label="State" placeholder="Gujarat" value={form.state} onChangeText={(v) => update("state", v)} />{error ? <Text style={styles.formError}>{error}</Text> : null}<Button loading={submitting} label="Send OTP to Verify" onPress={submit} /><Text style={styles.authLinkText}>Already have an account? <Text style={styles.link} onPress={() => navigation.navigate("FinancerLogin")}>Login</Text></Text></AuthShell>;
+  return <AuthShell scroll><Logo size={46} /><View style={styles.authHeading}><Text style={styles.authTitle}>Create your INRFS account</Text><Text style={styles.authSub}>Join thousands of financers managing loans digitally</Text></View><Field label="Full Name" placeholder="Suresh Patel" value={form.name} onChangeText={(v) => update("name", v)} maxLength={100} /><Field label="Business / Finance Name" placeholder="Patel Finance Services" value={form.business} onChangeText={(v) => update("business", v)} maxLength={200} /><Field label="Mobile Number" placeholder="+91 98765 43210" keyboardType="phone-pad" value={form.mobile} onChangeText={(v) => update("mobile", v.replace(/[^\d+ ()-]/g, ""))} maxLength={18} /><Field label="Email Address" placeholder="suresh@patelfinance.in" keyboardType="email-address" autoCapitalize="none" value={form.email} onChangeText={(v) => update("email", v.replace(/\s/g, ""))} maxLength={254} /><Field label="City" placeholder="Ahmedabad" value={form.city} onChangeText={(v) => update("city", v)} maxLength={100} /><Field label="State" placeholder="Gujarat" value={form.state} onChangeText={(v) => update("state", v)} maxLength={100} />{error ? <Text style={styles.formError}>{error}</Text> : null}<Button loading={submitting} label="Send OTP to Verify" onPress={submit} /><Text style={styles.authLinkText}>Already have an account? <Text style={styles.link} onPress={() => navigation.navigate("FinancerLogin")}>Login</Text></Text></AuthShell>;
 }
 
 type OtpProps = NativeStackScreenProps<RootStackParamList, "FinancerOtp">;
@@ -133,13 +150,15 @@ export function AdminLoginScreen({ navigation }: AdminProps) {
   const [submitting, setSubmitting] = useState(false);
   const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [visible, setVisible] = useState(false); const [remember, setRemember] = useState(true); const [error, setError] = useState("");
   const submit = async () => {
-    if (!email.includes("@") || password.length < 4) return setError("Enter a valid email address and password");
+    if (!validEmail(email)) return setError("Enter a valid email address.");
+    if (!password) return setError("Enter your password.");
+    if (password.length > 128) return setError("Password cannot exceed 128 characters.");
     setSubmitting(true); setError("");
-    try { const challenge = await api.post("/auth/login", { email, password, portal: "admin" }, { auth: false }); navigation.navigate("FinancerOtp", { mobile: email, challengeId: challenge.challengeId, admin: true }); }
+    try { const normalizedEmail = email.trim().toLowerCase(); const challenge = await api.post("/auth/login", { email: normalizedEmail, password, portal: "admin" }, { auth: false }); navigation.navigate("FinancerOtp", { mobile: normalizedEmail, challengeId: challenge.challengeId, admin: true }); }
     catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Unable to sign in."); }
     finally { setSubmitting(false); }
   };
-  const forgot = async () => { if (!email.includes("@")) return setError("Enter your registered email address first."); setSubmitting(true); setError(""); try { await api.post("/auth/password/forgot", { email }, { auth: false }); setError("If this account exists, password reset instructions have been sent."); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Unable to request a password reset."); } finally { setSubmitting(false); } };
+  const forgot = async () => { if (!validEmail(email)) return setError("Enter your registered email address first."); setSubmitting(true); setError(""); try { await api.post("/auth/password/forgot", { email: email.trim().toLowerCase() }, { auth: false }); setError("If this account exists, password reset instructions have been sent."); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Unable to request a password reset."); } finally { setSubmitting(false); } };
   return <AuthShell><Logo size={50} /><View style={styles.adminBadge}><Ionicons name="shield-checkmark-outline" size={20} color={colors.purple} /><Text style={styles.adminBadgeText}>ADMIN PORTAL</Text></View><View style={styles.authHeading}><Text style={styles.authTitle}>INRFS Administration</Text><Text style={styles.authSub}>Secure access for platform administrators</Text></View><Field label="Email Address" placeholder="admin@inrfs.in" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={(v) => { setEmail(v); setError(""); }} /><View><Field label="Password" placeholder="Enter password" secureTextEntry={!visible} value={password} onChangeText={(v) => { setPassword(v); setError(""); }} /><Pressable onPress={() => setVisible(!visible)} style={styles.eye}><Ionicons name={visible ? "eye-off-outline" : "eye-outline"} size={20} color={colors.muted} /></Pressable></View>{error ? <Text style={styles.formError}>{error}</Text> : null}<View style={styles.rememberRow}><Pressable onPress={() => setRemember(!remember)} style={styles.checkRow}><Ionicons name={remember ? "checkbox" : "square-outline"} color={colors.purple} size={21} /><Text style={styles.rememberText}>Remember Me</Text></Pressable><Text style={[styles.link, { color: colors.purple }]} onPress={() => void forgot()}>Forgot Password?</Text></View><Button loading={submitting} label="Login" accent="purple" onPress={submit} /><Button label="Back to portal selection" icon="arrow-back" variant="ghost" onPress={() => navigation.navigate("PortalSelection")} /></AuthShell>;
 }
 

@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from "react";
 import { View, Text, StyleSheet, Modal, ScrollView, RefreshControl, Dimensions, Pressable, Platform, KeyboardAvoidingView } from "react-native";
 import { Button, Card, Badge, Field, Segmented } from "../../components/ui";
-import { platformApi } from "../../services/platformApi";
+import { pageItems, platformApi } from "../../services/platformApi";
 import { useAuth } from "../../auth/AuthContext";
 import { colors, fonts, radii, shadows, spacing } from "../../theme/tokens";
 import { Ionicons } from "../../components/AppIcon";
@@ -100,12 +100,33 @@ function BarChart({ data }: { data: { month: string; collected: number }[] }) {
 export function DashboardScreen() {
   const { user } = useAuth();
   const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Financer';
-  const load = useCallback(() => platformApi.dashboard.financer(), []); 
+  const load = useCallback(async () => {
+    const [dashboard, paymentsPayload] = await Promise.all([
+      platformApi.dashboard.financer(),
+      platformApi.payments.all().catch(() => null),
+    ]);
+    const paymentItems = pageItems<any>(paymentsPayload);
+    const actualInterestCollected = paymentItems
+      .filter((payment) => {
+        const status = String(payment.status ?? "").toLowerCase();
+        return status === "completed" || status === "paid" || !status;
+      })
+      .reduce((total, payment) => total + Number(payment.interestAmount ?? 0), 0);
+
+    return {
+      ...dashboard,
+      totalInterestCollected:
+        dashboard.totalInterestCollected ??
+        dashboard.total_interest_collected ??
+        (paymentItems.length > 0 ? actualInterestCollected : 0),
+    };
+  }, []);
   const state = useRemote(load, {
     totalCustomers: 0,
     activeLoans: 0,
     totalPrincipal: 0,
     principalOutstanding: 0,
+    totalInterestCollected: 0,
     loanStatusData: [],
     monthlyCollections: [],
     upcomingPayments: []
@@ -231,6 +252,26 @@ export function DashboardScreen() {
                 <View style={styles.statContent}>
                   <Text style={styles.statLabel}>OUTSTANDING</Text>
                   <Text style={styles.statValue}>{rupees(d.principalOutstanding ?? 0)}</Text>
+                </View>
+              </View>
+
+              <View style={[styles.statCard, styles.statCardGreen]}>
+                <View style={[styles.statIcon, { backgroundColor: "rgba(116, 217, 0, 0.12)" }]}>
+                  <Ionicons name="cash-outline" size={20} color="#4A8200" />
+                </View>
+                <View style={styles.statContent}>
+                  <Text style={styles.statLabel}>TOTAL INTEREST COLLECTED</Text>
+                  <Text style={styles.statValue}>
+                    {rupees(
+                      d.totalInterestCollected ??
+                      d.total_interest_collected ??
+                      d.interestCollected ??
+                      d.interest_collected ??
+                      d.totalInterest ??
+                      d.total_interest ??
+                      0
+                    )}
+                  </Text>
                 </View>
               </View>
             </View>
@@ -404,6 +445,7 @@ const styles = StyleSheet.create({
   statCardCyan: { borderTopColor: colors.cyan },
   statCardPurple: { borderTopColor: colors.purple },
   statCardNavy: { borderTopColor: "#52647A" },
+  statCardGreen: { borderTopColor: "#74D900" },
   statIcon: { width: 38, height: 38, borderRadius: radii.md, alignItems: "center", justifyContent: "center" },
   statContent: { gap: 4 },
   statLabel: { color: colors.muted, fontFamily: fonts.bold, fontSize: 10, letterSpacing: 0.5 },
