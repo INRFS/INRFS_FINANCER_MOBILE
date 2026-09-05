@@ -7,8 +7,9 @@ import { s } from "./styles";
 import { Ionicons } from "../../components/AppIcon";
 import { colors, fonts, radii, spacing } from "../../theme/tokens";
 import { shareCsv } from "../../services/nativeExport";
+import { formatInr } from "../../utils/format";
 
-const rupees = (v: unknown) => `₹${Number(v ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+const rupees = formatInr;
 
 function formatLedgerDate(value: any) {
   if (!value) return "—";

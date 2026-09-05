@@ -105,8 +105,11 @@ export function FinancerSettingsScreen() {
       return Alert.alert("Required fields", "Name, business name, city, and state are required.");
     }
     const mobile = form.mobile.replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "");
+    if (!/^[A-Za-z][A-Za-z .'-]{1,99}$/.test(form.name.trim())) return Alert.alert("Invalid name", "Full name must contain 2 to 100 letters.");
+    if (form.businessName.trim().length < 2 || form.businessName.trim().length > 200 || !/[A-Za-z]/.test(form.businessName)) return Alert.alert("Invalid business name", "Business name must contain 2 to 200 characters and at least one letter.");
     if (!/^[6-9]\d{9}$/.test(mobile)) return Alert.alert("Invalid mobile", "Enter a valid 10-digit Indian mobile number.");
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return Alert.alert("Invalid email", "Enter a valid email address.");
+    if (form.email.trim().length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim())) return Alert.alert("Invalid email", "Enter a valid email address.");
+    if (!/^[A-Za-z][A-Za-z .'-]{1,99}$/.test(form.city.trim()) || !/^[A-Za-z][A-Za-z .'-]{1,99}$/.test(form.state.trim())) return Alert.alert("Invalid location", "City and state must contain 2 to 100 letters.");
     setBusy(true);
     try {
       const saved = await platformApi.profile.update({
@@ -210,34 +213,40 @@ export function FinancerSettingsScreen() {
                 label="Full Name"
                 value={form.name}
                 onChangeText={(v) => setForm({ ...form, name: v })}
+                maxLength={100}
               />
               <Field
                 label="Business Name"
                 value={form.businessName}
                 onChangeText={(v) => setForm({ ...form, businessName: v })}
+                maxLength={200}
               />
               <Field
                 label="Mobile"
                 value={form.mobile}
-                onChangeText={(v) => setForm({ ...form, mobile: v })}
+                onChangeText={(v) => setForm({ ...form, mobile: v.replace(/\D/g, "") })}
                 keyboardType="phone-pad"
+                maxLength={10}
               />
               <Field
                 label="Email"
                 value={form.email}
-                onChangeText={(v) => setForm({ ...form, email: v })}
+                onChangeText={(v) => setForm({ ...form, email: v.replace(/\s/g, "") })}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                maxLength={254}
               />
               <Field
                 label="City"
                 value={form.city}
                 onChangeText={(v) => setForm({ ...form, city: v })}
+                maxLength={100}
               />
               <Field
                 label="State"
                 value={form.state}
                 onChangeText={(v) => setForm({ ...form, state: v })}
+                maxLength={100}
               />
             </View>
 

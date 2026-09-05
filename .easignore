@@ -1,0 +1,40 @@
+# Dependencies and Expo caches
+node_modules/
+.expo/
+.expo-temp/
+
+# Generated JavaScript bundles
+dist/
+web-build/
+
+# Native Android build output and machine-local configuration
+android/.gradle/
+android/build/
+android/app/build/
+android/.cxx/
+android/app/.cxx/
+android/local.properties
+android/.idea/
+
+# Other applications kept beside the mobile source
+INRFS_FINANCER_FE/
+inrfs_financer_api/
+
+# Local QA, editor, repository, and temporary files
+.git/
+.github/
+.idea/
+.codex-temp/
+.verification/
+.secrets/
+.env
+*.log
+*.apk
+*.aab
+*.zip
+.DS_Store
+Thumbs.db
+
+# Documentation that is not needed to compile the client APK
+QA_AUDIT_2026-08-28.md
+FINANCER_UI_UX_AUDIT.md

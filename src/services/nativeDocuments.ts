@@ -1,6 +1,7 @@
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import * as IntentLauncher from "expo-intent-launcher";
+import * as ImagePicker from "expo-image-picker";
 import * as Sharing from "expo-sharing";
 import { Platform } from "react-native";
 
@@ -80,4 +81,21 @@ export async function downloadAndShareDocument(id: string, originalFileName = "d
     throw new Error("No application is available to open this document.");
   }
   return result.uri;
+}
+
+export async function takePhoto(allowsEditing = false): Promise<PickedDocument | null> {
+  const permission = await ImagePicker.requestCameraPermissionsAsync();
+  if (!permission.granted) throw new Error("Camera permission is required to take a customer photograph.");
+  const result = await ImagePicker.launchCameraAsync({
+    mediaTypes: ["images"],
+    allowsEditing,
+    ...(allowsEditing ? { aspect: [3, 4] as [number, number] } : {}),
+    quality: 0.8,
+  });
+  if (result.canceled) return null;
+  const asset = result.assets[0];
+  if (!asset) return null;
+  const mimeType = asset.mimeType ?? "image/jpeg";
+  const extension = mimeType === "image/png" ? "png" : "jpg";
+  return { uri: asset.uri, name: asset.fileName ?? `customer-photo-${Date.now()}.${extension}`, mimeType, size: asset.fileSize };
 }

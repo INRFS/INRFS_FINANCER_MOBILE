@@ -7,6 +7,7 @@ let accessToken: string | null = null;
 let refreshToken: string | null = null;
 let refreshPromise: Promise<string> | null = null;
 let sessionExpired: (() => void) | null = null;
+const REQUEST_TIMEOUT_MS = 20_000;
 
 export type AuthUser = { id: string; email?: string; mobile?: string; fullName?: string; firstName?: string; lastName?: string; businessName?: string; financerId?: string | null; roles?: string[] };
 export type TokenResponse = { accessToken: string; refreshToken: string; expiresAt: string; user: AuthUser };
@@ -49,9 +50,21 @@ async function parseResponse(response: Response) {
 async function refreshSession() {
   if (!refreshToken) throw new ApiError("Your session has expired. Please sign in again.", 401);
   if (!refreshPromise) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     refreshPromise = fetch(`${API_BASE_URL}/auth/refresh`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refreshToken }),
-    }).then(parseResponse).then(async (tokens: TokenResponse) => { await tokenStore.save(tokens); return tokens.accessToken; }).finally(() => { refreshPromise = null; });
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken }),
+      signal: controller.signal,
+    })
+      .then(parseResponse)
+      .then(async (tokens: TokenResponse) => { await tokenStore.save(tokens); return tokens.accessToken; })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) throw new ApiError("The session refresh timed out. Please sign in again.", 0);
+        throw error;
+      })
+      .finally(() => { clearTimeout(timeout); refreshPromise = null; });
   }
   return refreshPromise;
 }
@@ -62,16 +75,36 @@ export async function apiRequest(path: string, options: RequestOptions = {}): Pr
   if (!(options.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (accessToken && options.auth !== false) headers.set("Authorization", `Bearer ${accessToken}`);
   const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
-  let response = await fetch(url, { ...options, headers });
-  if (response.status === 401 && options.auth !== false && options.retryAuth !== false) {
+  const controller = new AbortController();
+  const forwardAbort = () => controller.abort();
+  options.signal?.addEventListener("abort", forwardAbort, { once: true });
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const request = async () => {
     try {
-      headers.set("Authorization", `Bearer ${await refreshSession()}`);
-      response = await fetch(url, { ...options, headers });
-    } catch (error) {
-      await tokenStore.clear(); sessionExpired?.(); throw error;
+      return await fetch(url, { ...options, headers, signal: controller.signal });
+    } catch {
+      if (controller.signal.aborted) {
+        throw new ApiError(options.signal?.aborted ? "Request cancelled." : "The request timed out. Check your connection and try again.", 0);
+      }
+      throw new ApiError("Unable to connect. Check your internet connection and try again.", 0);
     }
+  };
+  let response;
+  try {
+    response = await request();
+    if (response.status === 401 && options.auth !== false && options.retryAuth !== false) {
+      try {
+        headers.set("Authorization", `Bearer ${await refreshSession()}`);
+        response = await request();
+      } catch (error) {
+        await tokenStore.clear(); sessionExpired?.(); throw error;
+      }
+    }
+    return parseResponse(response);
+  } finally {
+    clearTimeout(timeout);
+    options.signal?.removeEventListener("abort", forwardAbort);
   }
-  return parseResponse(response);
 }
 
 export const api = {
@@ -80,4 +113,3 @@ export const api = {
   put: (path: string, data: unknown, options?: RequestOptions) => apiRequest(path, { ...options, method: "PUT", body: JSON.stringify(data) }),
   delete: (path: string, options?: RequestOptions) => apiRequest(path, { ...options, method: "DELETE" }),
 };
-

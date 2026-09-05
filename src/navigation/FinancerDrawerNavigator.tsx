@@ -1,6 +1,6 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useState, type ComponentType } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../auth/AuthContext";
 import { Ionicons } from "../components/AppIcon";
@@ -13,7 +13,6 @@ import { CustomersScreen } from "../screens/financer/CustomersScreen";
 import { LoansScreen } from "../screens/financer/LoansScreen";
 import { DuesScreen } from "../screens/financer/DuesScreen";
 import { LedgerScreen } from "../screens/financer/LedgerScreen";
-import { InterestScheduleScreen } from "../screens/financer/InterestScheduleScreen";
 import { NotificationsScreen } from "../screens/financer/NotificationsScreen";
 import { ReportsScreen } from "../screens/financer/ReportsScreen";
 import { FinancerServiceChargeScreen } from "../screens/financer/FinancerServiceChargeScreen";
@@ -22,7 +21,7 @@ import { FinancerSettingsScreen } from "../screens/financer/FinancerSettingsScre
 
 const Tab = createBottomTabNavigator<any>();
 
-function PortalHeader() {
+function PortalHeader({ onNotifications }: { onNotifications: () => void }) {
   const { user, logout } = useAuth();
   const identity = user?.businessName ?? user?.fullName ?? user?.email ?? "Financer";
   const confirmLogout = () => Alert.alert("Log out", "Are you sure you want to log out?", [
@@ -33,6 +32,9 @@ function PortalHeader() {
     <Logo size={34}/>
     <View style={s.portalBadge}><Text style={s.portal}>FINANCER</Text></View>
     <Text numberOfLines={1} style={s.user}>{identity}</Text>
+    <Pressable accessibilityRole="button" accessibilityLabel="Open notifications" hitSlop={10} onPress={onNotifications}>
+      <Ionicons name="notifications-outline" size={23} color={colors.muted}/>
+    </Pressable>
     <Pressable accessibilityRole="button" accessibilityLabel="Log out" hitSlop={10} onPress={confirmLogout}>
       <Ionicons name="log-out-outline" size={24} color={colors.muted}/>
     </Pressable>
@@ -40,15 +42,13 @@ function PortalHeader() {
 }
 
 const moreItems = [
-  ["Interest Schedule", "calendar-outline"],
-  ["Customer Ledger", "document-text-outline"], ["Notifications", "notifications-outline"],
+  ["Customer Ledger", "document-text-outline"],
   ["Reports", "bar-chart-outline"], ["Service Charge", "receipt-outline"],
   ["Support", "help-circle-outline"], ["Settings", "settings-outline"],
 ] as const;
 
 const moreScreens: Record<string, ComponentType<any>> = {
-  "Interest Schedule": InterestScheduleScreen,
-  "Customer Ledger": LedgerScreen, Notifications: NotificationsScreen, Reports: ReportsScreen,
+  "Customer Ledger": LedgerScreen, Reports: ReportsScreen,
   "Service Charge": FinancerServiceChargeScreen, Support: SupportScreen, Settings: FinancerSettingsScreen,
 };
 
@@ -74,14 +74,12 @@ function MoreScreen() {
 }
 
 export function FinancerDrawerNavigator() {
-  const icon = ({ route }: any) => ({ focused, color }: any) => <Ionicons
-    name={route.name === "Dashboard" ? "grid-outline" : route.name === "Customers" ? "people-outline" : route.name === "Loans" ? "wallet-outline" : route.name === "Payments" ? "cash-outline" : "menu"}
-    size={21} color={color}/>;
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   return <View style={s.app}>
-    <PortalHeader/>
+    <PortalHeader onNotifications={() => setNotificationsOpen(true)}/>
     <Tab.Navigator screenOptions={({ route }) => ({
       headerShown: false,
-      tabBarIcon: icon({ route }),
+      tabBarIcon: tabIcon(route.name),
       tabBarActiveTintColor: colors.cyan,
       tabBarInactiveTintColor: colors.subtle,
       tabBarLabelStyle: s.navText,
@@ -93,7 +91,25 @@ export function FinancerDrawerNavigator() {
       <Tab.Screen name="Payments" component={DuesScreen}/>
       <Tab.Screen name="More" component={MoreScreen}/>
     </Tab.Navigator>
+    <Modal visible={notificationsOpen} animationType="slide" onRequestClose={() => setNotificationsOpen(false)}>
+      <SafeAreaView edges={["top"]} style={s.notificationPage}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Close notifications" style={s.backRow} onPress={() => setNotificationsOpen(false)}>
+          <Ionicons name="arrow-back" size={20} color={colors.cyan}/><Text style={s.backText}>Back</Text>
+        </Pressable>
+        <NotificationsScreen/>
+      </SafeAreaView>
+    </Modal>
   </View>;
+}
+
+function tabIcon(routeName: string) {
+  return function TabIcon({ color }: { color: string }) {
+    return <Ionicons
+      name={routeName === "Dashboard" ? "grid-outline" : routeName === "Customers" ? "people-outline" : routeName === "Loans" ? "wallet-outline" : routeName === "Payments" ? "cash-outline" : "menu"}
+      size={21}
+      color={color}
+    />;
+  };
 }
 
 const s = StyleSheet.create({
@@ -106,6 +122,7 @@ const s = StyleSheet.create({
   navText: { fontFamily: fonts.medium, fontSize: 9 },
   moreList: { paddingBottom: 90 },
   morePage: { flex: 1, backgroundColor: colors.background },
+  notificationPage: { flex: 1, backgroundColor: colors.background },
   backRow: { minHeight: 44, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.border },
   backText: { color: colors.cyan, fontFamily: fonts.semibold, fontSize: 13 },
   moreRow: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 12, borderBottomWidth: 1, borderBottomColor: colors.border },

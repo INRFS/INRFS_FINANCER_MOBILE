@@ -7,11 +7,15 @@ import { RemoteState, useRemote } from "./shared";
 import { Ionicons } from "../../components/AppIcon";
 import { colors, fonts, radii, spacing } from "../../theme/tokens";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { downloadAndShareDocument, pickAndUploadDocument, pickDocument, uploadPickedDocument } from "../../services/nativeDocuments";
+import { downloadAndShareDocument, pickAndUploadDocument, pickDocument, takePhoto, uploadPickedDocument } from "../../services/nativeDocuments";
+import { localDateOnly } from "../../utils/date";
+import { formatInr } from "../../utils/format";
+import { collectionInterestForFrequency, totalInterestForDuration } from "./loanInterest";
+import { resolveAddressByPin, suggestAddresses, type AddressMatch } from "../../utils/addressLookup";
 
-const todayISO = () => new Date(Date.now() + 330 * 60 * 1000).toISOString().slice(0, 10);
+const todayISO = () => localDateOnly();
 
-const formatCurrency = (v: unknown) => `₹${Number(v ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+const formatCurrency = formatInr;
 const toNumber = (value: unknown) => { const n = Number(String(value ?? '').replace(/[₹,\s]/g, '')); return Number.isFinite(n) ? n : 0; };
 const getInitial = (name: string) => name?.trim()?.charAt(0)?.toUpperCase() || 'C';
 
@@ -54,10 +58,6 @@ const addLoanDuration = (startDate: string, value: string, unit: string) => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 };
 
-const dateDays = (from: string, to: string) => from && to
-  ? Math.round((new Date(`${to}T00:00:00`).getTime() - new Date(`${from}T00:00:00`).getTime()) / 86_400_000)
-  : 0;
-
 const firstInterestDue = (startDate: string, frequency: string, maturityDate: string) => {
   const candidate = frequency === 'Daily' ? addLoanDuration(startDate, '1', 'Days')
     : frequency === 'Weekly' ? addLoanDuration(startDate, '1', 'Weeks')
@@ -72,9 +72,6 @@ const collectionInterestLabel = (frequency: string) => ({
   Monthly: 'Estimated First Monthly Interest',
   AtMaturity: 'Estimated Interest at Maturity',
 }[frequency] || 'Estimated Collection Interest');
-
-const monthlyInterestForDays = (principal: number, monthlyRate: number, days: number) =>
-  principal * monthlyRate / 100 * days / 30;
 
 const normalizeIndianMobile = (value: string) => {
   const digits = value.replace(/\D/g, '');
@@ -96,18 +93,21 @@ const isValidAdultDate = (value: string) => {
 
 const validateCustomerStep = (step: number, form: {
   name: string; phone: string; email: string; dob: string; city: string;
-  stateName: string; pinCode: string; aadhaar: string; pan: string;
+  stateName: string; pinCode: string; aadhaar: string; pan: string; gender: string;
+  houseNumber: string; street: string; area: string;
 }) => {
   if (step === 1) {
     if (!form.name.trim()) return 'Full name is required.';
-    if (form.name.trim().length < 2 || form.name.trim().length > 100) return 'Full name must contain between 2 and 100 characters.';
+    if (!/^[A-Za-z][A-Za-z .'-]{1,99}$/.test(form.name.trim())) return 'Full name must contain 2 to 100 letters.';
     if (!/^[6-9]\d{9}$/.test(normalizeIndianMobile(form.phone))) return 'Enter a valid 10-digit Indian mobile number.';
     if (form.email.trim().length > 254 || (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))) return 'Enter a valid email address.';
     if (!isValidAdultDate(form.dob)) return 'Customer must have a valid date of birth and be at least 18 years old.';
+    if (!['Male', 'Female', 'Other'].includes(form.gender)) return 'Select a gender.';
   }
   if (step === 2) {
-    if (!form.city.trim() || form.city.trim().length > 100) return 'City is required and must not exceed 100 characters.';
-    if (!form.stateName.trim() || form.stateName.trim().length > 100) return 'State is required and must not exceed 100 characters.';
+    if (![form.houseNumber, form.street, form.area].some(value => value.trim())) return 'Enter at least one address detail: house number, street, or area.';
+    if (!/^[A-Za-z][A-Za-z .'-]{1,99}$/.test(form.city.trim())) return 'City must contain 2 to 100 letters.';
+    if (!/^[A-Za-z][A-Za-z .'-]{1,99}$/.test(form.stateName.trim())) return 'State must contain 2 to 100 letters.';
     if (!/^[1-9]\d{5}$/.test(form.pinCode.trim())) return 'Enter a valid 6-digit Indian PIN code.';
   }
   if (step === 3) {
@@ -471,7 +471,9 @@ function LedgerTab({ customer }: { customer: any }) {
   const state = useRemote(load, { items: [] } as any);
 
   if (state.loading) return <Text style={{ textAlign: "center", color: colors.muted, marginTop: 20 }}>Loading ledger...</Text>;
-  const entries = pageItems(state.data);
+  const entries = Array.isArray((state.data as any)?.entries)
+    ? (state.data as any).entries
+    : pageItems(state.data);
   
   if (!entries.length) return <EmptyState icon="document-text-outline" message="No ledger entries." />;
   return (
@@ -479,7 +481,7 @@ function LedgerTab({ customer }: { customer: any }) {
       {entries.map((entry: any) => (
         <Card key={entry.id} style={{ padding: 16 }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 8 }}>
-            <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.muted }}>{formatDate(entry.date || entry.createdAt)}</Text>
+            <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.muted }}>{formatDate(entry.transactionAt || entry.date || entry.createdAt)}</Text>
             <Badge status={entry.status || "Completed"} />
           </View>
           <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.dark, marginBottom: 8 }}>{entry.description || entry.type}</Text>
@@ -563,7 +565,7 @@ function EditCustomerModal({ customer, close, refreshList, onUpdated }: { custom
   const pan = customer.panMasked || customer.pan || "";
 
   const save = async () => {
-    const validationForm = { name, phone, email, dob, city, stateName, pinCode, aadhaar: "", pan: "" };
+    const validationForm = { name, phone, email, dob, gender, houseNumber, street, area, city, stateName, pinCode, aadhaar: "", pan: "" };
     for (const validationStep of [1, 2]) {
       const error = validateCustomerStep(validationStep, validationForm);
       if (error) return Alert.alert("Check customer details", error);
@@ -606,7 +608,7 @@ function EditCustomerModal({ customer, close, refreshList, onUpdated }: { custom
             </View>
             <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
               <Field label="Full Name *" value={name} onChangeText={setName} maxLength={100} />
-              <Field label="Mobile Number *" value={phone} onChangeText={value => setPhone(value.replace(/[^\d+]/g, ""))} keyboardType="phone-pad" maxLength={13} />
+              <Field label="Mobile Number *" value={phone} onChangeText={value => setPhone(value.replace(/\D/g, ""))} keyboardType="phone-pad" maxLength={10} />
               <Field label="Email Address" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" maxLength={254} />
               <Field label="Date of Birth *" value={dob} onChangeText={setDob} placeholder="YYYY-MM-DD" />
               <View style={{ gap: 8 }}>
@@ -636,29 +638,28 @@ function EditCustomerModal({ customer, close, refreshList, onUpdated }: { custom
 function AddLoanModal({ customer, products, close, onCreated }: { customer: any, products: any[], close: () => void, onCreated: (loan: any) => void }) {
   const product = products.find(x => x.isActive !== false) || products[0];
   const [busy, setBusy] = useState(false);
-  const [principal, setPrincipal] = useState("0");
-  const [rate, setRate] = useState("0");
-  const [durationValue, setDurationValue] = useState("0");
+  const [principal, setPrincipal] = useState("");
+  const [rate, setRate] = useState("");
+  const [durationValue, setDurationValue] = useState("");
   const [durationUnit, setDurationUnit] = useState("Days");
   const [collectionFreq, setCollectionFreq] = useState("Daily");
-  const [startDate, setStartDate] = useState(todayISO());
+  const [startDate, setStartDate] = useState("");
   const [adminCollectionMonitoring, setAdminCollectionMonitoring] = useState(false);
 
   const principalAmount = toNumber(principal);
   const monthlyRate = toNumber(rate);
   const maturityDate = addLoanDuration(startDate, durationValue, durationUnit);
   const firstDueDate = firstInterestDue(startDate, collectionFreq, maturityDate);
-  const collectionInterest = collectionFreq === 'Monthly'
-    ? principalAmount * monthlyRate / 100
-    : monthlyInterestForDays(principalAmount, monthlyRate, dateDays(startDate, firstDueDate));
-  const totalInterest = monthlyInterestForDays(principalAmount, monthlyRate, dateDays(startDate, maturityDate));
+  const totalInterest = totalInterestForDuration(principalAmount, monthlyRate, durationValue, durationUnit);
+  const collectionInterest = collectionInterestForFrequency(principalAmount, monthlyRate, collectionFreq, totalInterest);
 
   const save = async () => {
     const p = toNumber(principal);
-    if (p <= 0) return Alert.alert("Invalid principal", "Enter a valid principal amount.");
-    if (toNumber(durationValue) <= 0) return Alert.alert("Invalid period", "Enter a valid number of periods.");
-    if (monthlyRate < 0) return Alert.alert("Invalid rate", "Enter a valid monthly interest rate.");
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !maturityDate) return Alert.alert("Invalid date", "Enter the start date as YYYY-MM-DD.");
+    const periods=Number(durationValue);const parsedDate=new Date(`${startDate}T00:00:00Z`);
+    if (!Number.isFinite(p)||p <= 0||p>1_000_000_000) return Alert.alert("Invalid principal", "Principal must be greater than 0 and not more than ₹1,000,000,000.");
+    if (!Number.isInteger(periods)||periods<1||periods>3650) return Alert.alert("Invalid period", "Periods must be a whole number between 1 and 3650.");
+    if (!rate.trim()||!Number.isFinite(monthlyRate)||monthlyRate < 0||monthlyRate>100) return Alert.alert("Invalid rate", "Monthly interest rate must be between 0 and 100 percent.");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)||Number.isNaN(parsedDate.getTime())||parsedDate.toISOString().slice(0,10)!==startDate||!maturityDate) return Alert.alert("Invalid date", "Enter a real start date as YYYY-MM-DD.");
     
     setBusy(true);
     try {
@@ -700,18 +701,18 @@ function AddLoanModal({ customer, products, close, onCreated }: { customer: any,
               <Pressable onPress={close}><Ionicons name="close" size={24} color={colors.subtle} /></Pressable>
             </View>
             <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
-              <Field label="Principal Amount (₹) *" value={principal} onChangeText={setPrincipal} keyboardType="number-pad" placeholder="e.g. 10000" />
-              <Field label="Monthly Interest Rate (%) *" value={rate} onChangeText={setRate} keyboardType="decimal-pad" />
+              <Field label="Principal Amount (₹) *" value={principal} onChangeText={v=>setPrincipal(v.replace(/[^\d.]/g,""))} keyboardType="decimal-pad" placeholder="e.g. 10000" maxLength={15}/>
+              <Field label="Monthly Interest Rate (%) *" value={rate} onChangeText={v=>setRate(v.replace(/[^\d.]/g,""))} keyboardType="decimal-pad" maxLength={6}/>
               <View style={{ gap: 8 }}>
                 <Text style={localStyles.metricLabel}>Loan Period Unit *</Text>
                 <Segmented options={["Days", "Weeks", "Months"]} value={durationUnit} onChange={setDurationUnit} />
               </View>
-              <Field label={`Number of ${durationUnit} *`} value={durationValue} onChangeText={setDurationValue} keyboardType="number-pad" />
+              <Field label={`Number of ${durationUnit} *`} value={durationValue} onChangeText={v=>setDurationValue(v.replace(/\D/g,""))} keyboardType="number-pad" maxLength={4}/>
               <View style={{ gap: 8 }}>
                 <Text style={localStyles.metricLabel}>Interest Collection *</Text>
                 <Segmented options={["Daily", "Weekly", "Monthly", "AtMaturity"]} value={collectionFreq} onChange={setCollectionFreq} />
               </View>
-              <Field label="Start Date *" value={startDate} onChangeText={setStartDate} placeholder="YYYY-MM-DD" />
+              <Field label="Start Date *" value={startDate} onChangeText={setStartDate} placeholder="YYYY-MM-DD" maxLength={10}/>
               <Field label="Maturity Date" value={maturityDate} editable={false} />
               <Field label="First Interest Due" value={firstDueDate} editable={false} />
               <Field label={collectionInterestLabel(collectionFreq)} value={formatCurrency(collectionInterest)} editable={false} />
@@ -745,14 +746,18 @@ function RecordPaymentModal({ customer, close, refreshList }: { customer: any, c
   const [loanId, setLoanId] = useState(activeLoans.length > 0 ? activeLoans[0].id : "");
   const [date, setDate] = useState(todayISO());
   const [amount, setAmount] = useState("");
-  const [type, setType] = useState("Interest");
+  const [type, setType] = useState("Interest Only");
   const [method, setMethod] = useState("UPI");
   const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
 
   const save = async () => {
     const a = toNumber(amount);
-    if (a <= 0 || !loanId) return Alert.alert("Error", "Please enter valid payment details.");
+    const parsedDate=new Date(`${date}T00:00:00Z`);
+    if (!Number.isFinite(a)||a <= 0 || !loanId) return Alert.alert("Invalid payment", "Select a loan and enter an amount greater than 0.");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(parsedDate.getTime())||parsedDate.toISOString().slice(0,10)!==date||date>todayISO()) return Alert.alert("Invalid date", "Payment date must be a real date that is not in the future.");
+    if(reference.trim().length>100)return Alert.alert("Invalid reference","Transaction reference cannot exceed 100 characters.");
+    if(notes.trim().length>1000)return Alert.alert("Invalid notes","Notes cannot exceed 1000 characters.");
     
     setBusy(true);
     try {
@@ -763,6 +768,7 @@ function RecordPaymentModal({ customer, close, refreshList }: { customer: any, c
         amount: a,
         receivedAt: new Date(`${date || todayISO()}T12:00:00`).toISOString(),
         mode: modeMap[method] || method,
+        paymentType: type === "Interest Only" ? "InterestOnly" : type === "Full Settlement" ? "FullSettlement" : "Regular",
         externalReference: reference || null,
         notes: notes || null
       });
@@ -792,21 +798,20 @@ function RecordPaymentModal({ customer, close, refreshList }: { customer: any, c
                 <>
                   <View style={{ gap: 8 }}>
                     <Text style={localStyles.metricLabel}>Loan</Text>
-                    {/* Simplified for mobile: assume activeLoans handles it via selection, but for now we just show a label since there might be no Select component in ui.tsx. Let's use Segmented if small or a simple mapping */}
-                    <Segmented options={activeLoans.map((l: any) => l.displayId || l.id).slice(0, 3)} value={activeLoans.find((l: any) => l.id === loanId)?.displayId || activeLoans.find((l: any) => l.id === loanId)?.id} onChange={(v) => { const l = activeLoans.find((al: any) => (al.displayId || al.id) === v); if (l) setLoanId(l.id); }} />
+                    <Segmented options={activeLoans.map((l: any) => l.loanNumber || l.displayId || l.id)} value={activeLoans.find((l: any) => l.id === loanId)?.loanNumber || activeLoans.find((l: any) => l.id === loanId)?.displayId || activeLoans.find((l: any) => l.id === loanId)?.id} onChange={(v) => { const l = activeLoans.find((al: any) => (al.loanNumber || al.displayId || al.id) === v); if (l) setLoanId(l.id); }} />
                   </View>
-                  <Field label="Payment Date *" value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" />
-                  <Field label="Amount Received (₹) *" value={amount} onChangeText={setAmount} keyboardType="number-pad" />
+                  <Field label="Payment Date *" value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" maxLength={10}/>
+                  <Field label="Amount Received (₹) *" value={amount} onChangeText={v=>setAmount(v.replace(/[^\d.]/g,""))} keyboardType="decimal-pad" maxLength={15}/>
                   <View style={{ gap: 8 }}>
                     <Text style={localStyles.metricLabel}>Payment Type</Text>
-                    <Segmented options={["Interest", "Principal", "Principal + Interest"]} value={type} onChange={setType} />
+                    <Segmented options={["Interest Only", "Regular", "Full Settlement"]} value={type} onChange={setType} />
                   </View>
                   <View style={{ gap: 8 }}>
                     <Text style={localStyles.metricLabel}>Payment Method</Text>
                     <Segmented options={["UPI", "Cash", "Bank Transfer", "Cheque"]} value={method} onChange={setMethod} />
                   </View>
-                  <Field label="Transaction Reference" value={reference} onChangeText={setReference} />
-                  <Field label="Notes" value={notes} onChangeText={setNotes} multiline />
+                  <Field label="Transaction Reference" value={reference} onChangeText={setReference} maxLength={100}/>
+                  <Field label="Notes" value={notes} onChangeText={setNotes} multiline maxLength={1000}/>
 
                   <View style={{ padding: 16, backgroundColor: colors.cyanSoft, borderRadius: radii.md, gap: 8 }}>
                      <View style={{ flexDirection: "row", justifyContent: "space-between" }}><Text style={localStyles.metricLabel}>Amount Due</Text><Text style={{ fontFamily: fonts.bold }}>{formatCurrency(customer.outstanding)}</Text></View>
@@ -836,7 +841,7 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
   const [email, setEmail] = useState("");
   const [dob, setDob] = useState("");
   const [showDobPicker, setShowDobPicker] = useState(false);
-  const [gender, setGender] = useState("Other");
+  const [gender, setGender] = useState("");
   const [houseNumber, setHouseNumber] = useState("");
   const [street, setStreet] = useState("");
   const [area, setArea] = useState("");
@@ -850,8 +855,12 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
   const [addressProof, setAddressProof] = useState<any>(null);
   const [photograph, setPhotograph] = useState<any>(null);
   const [otherDocuments, setOtherDocuments] = useState<any>(null);
+  const [citySuggestions, setCitySuggestions] = useState<AddressMatch[]>([]);
+  const [stateSuggestions, setStateSuggestions] = useState<AddressMatch[]>([]);
+  const [pinLookupMessage, setPinLookupMessage] = useState("");
+  const [pinResolvedAddress, setPinResolvedAddress] = useState<AddressMatch | null>(null);
 
-  const formForValidation = { name, phone, email, dob, city, stateName, pinCode, aadhaar, pan };
+  const formForValidation = { name, phone, email, dob, gender, houseNumber, street, area, city, stateName, pinCode, aadhaar, pan };
   const maximumBirthDate = useMemo(() => {
     const date = new Date();
     date.setFullYear(date.getFullYear() - 18);
@@ -870,10 +879,54 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
     setStep(targetStep);
   };
 
+  const updateCity = (value: string) => {
+    setCity(value);
+    setCitySuggestions(suggestAddresses(value, "city"));
+    setStateSuggestions([]);
+  };
+  const updateState = (value: string) => {
+    setStateName(value);
+    setStateSuggestions(suggestAddresses(value, "state"));
+    setCitySuggestions([]);
+  };
+  const updatePinCode = async (value: string) => {
+    const digits = value.replace(/\D/g, "");
+    setPinCode(digits);
+    if (digits.length < 6 && pinResolvedAddress) {
+      setCity(current => current === pinResolvedAddress.city ? "" : current);
+      setStateName(current => current === pinResolvedAddress.state ? "" : current);
+      setPinResolvedAddress(null);
+    }
+    setPinLookupMessage(digits.length === 6 ? "Looking up PIN…" : "");
+    const match = await resolveAddressByPin(digits);
+    if (match) {
+      setPinResolvedAddress(match);
+      setCity(match.city);
+      setStateName(match.state);
+      setCitySuggestions([]);
+      setStateSuggestions([]);
+      setPinLookupMessage("");
+    } else if (digits.length === 6) {
+      setPinLookupMessage("PIN not found. Enter city and state manually.");
+    }
+  };
+  const selectCity = (match: AddressMatch) => {
+    setCity(match.city);
+    setStateName(match.state);
+    setCitySuggestions([]);
+  };
+  const selectState = (match: AddressMatch) => {
+    setStateName(match.state);
+    setStateSuggestions([]);
+  };
+
   const save = async () => {
     for (const validationStep of [1, 2, 3]) {
       const error = validateCustomerStep(validationStep, formForValidation);
       if (error) return Alert.alert("Check customer details", error);
+    }
+    if (!aadhaarDoc || !panDoc || !addressProof || !photograph) {
+      return Alert.alert("Required documents", "Upload Aadhaar, PAN, address proof, and photograph before saving the customer.");
     }
     setBusy(true);
     try {
@@ -902,14 +955,11 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
     }
   };
 
-  const handlePick = async (setter: (v: any) => void) => {
-    try {
-      const doc = await pickDocument();
-      if (doc) setter(doc);
-    } catch {
-      Alert.alert("Picker Error", "Could not select document.");
-    }
-  };
+  const chooseDocumentSource = (label: string, setter: (value: any) => void, fileType = "*/*") => Alert.alert(label, "Choose how to add this document.", [
+    { text: "Camera", onPress: () => void (async () => { try { const document = await takePhoto(label === "Photograph"); if (document) setter(document); } catch (error) { Alert.alert("Camera unavailable", error instanceof Error ? error.message : "Could not open the camera."); } })() },
+    { text: "Folder / Files", onPress: () => void (async () => { try { const document = await pickDocument(fileType); if (document) setter(document); } catch { Alert.alert("Picker Error", "Could not select the document."); } })() },
+    { text: "Cancel", style: "cancel" },
+  ]);
 
   return (
     <Screen>
@@ -920,7 +970,7 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
             <Text style={{ fontFamily: fonts.bold, fontSize: 16, marginBottom: 12 }}>Personal Information</Text>
             <View style={{ gap: 16 }}>
               <Field label="Full name *" value={name} onChangeText={setName} maxLength={100} />
-              <Field label="Mobile *" value={phone} onChangeText={value => setPhone(value.replace(/[^\d+]/g, ""))} keyboardType="phone-pad" maxLength={13} />
+              <Field label="Mobile *" value={phone} onChangeText={value => setPhone(value.replace(/\D/g, ""))} keyboardType="phone-pad" maxLength={10} />
               <Field label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" maxLength={254} />
               <View style={{ gap: 7 }}>
                 <Text style={localStyles.dateLabel}>Date of birth *</Text>
@@ -942,9 +992,12 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
               <Field label="House Number" value={houseNumber} onChangeText={setHouseNumber} />
               <Field label="Street" value={street} onChangeText={setStreet} />
               <Field label="Area/Village" value={area} onChangeText={setArea} />
-              <Field label="City *" value={city} onChangeText={setCity} maxLength={100} />
-              <Field label="State *" value={stateName} onChangeText={setStateName} maxLength={100} />
-              <Field label="PIN Code *" value={pinCode} onChangeText={value => setPinCode(value.replace(/\D/g, ""))} keyboardType="number-pad" maxLength={6} />
+              <Field label="City *" value={city} onChangeText={updateCity} maxLength={100} />
+              {citySuggestions.length > 0 ? <View style={localStyles.suggestions}>{citySuggestions.map(match => <Pressable key={`${match.pin}-${match.city}`} onPress={() => selectCity(match)} style={localStyles.suggestion}><Text style={localStyles.suggestionText}>{match.city}, {match.state} · {match.pin}</Text></Pressable>)}</View> : null}
+              <Field label="State *" value={stateName} onChangeText={updateState} maxLength={100} />
+              {stateSuggestions.length > 0 ? <View style={localStyles.suggestions}>{stateSuggestions.map(match => <Pressable key={`${match.pin}-${match.state}`} onPress={() => selectState(match)} style={localStyles.suggestion}><Text style={localStyles.suggestionText}>{match.state} · {match.city}</Text></Pressable>)}</View> : null}
+              <Field label="PIN Code *" value={pinCode} onChangeText={value => void updatePinCode(value)} keyboardType="number-pad" maxLength={6} />
+              {pinLookupMessage ? <Text style={{ color: colors.muted, fontSize: 12 }}>{pinLookupMessage}</Text> : null}
             </View>
             <View style={{ flexDirection: "row", marginTop: 20, gap: 12 }}>
               <Button style={{ flex: 1 }} label="Back" variant="secondary" onPress={() => setStep(1)} />
@@ -967,14 +1020,14 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
         )}
         {step === 4 && (
           <Card>
-            <Text style={{ fontFamily: fonts.bold, fontSize: 16, marginBottom: 12 }}>Documents (Optional)</Text>
+            <Text style={{ fontFamily: fonts.bold, fontSize: 16, marginBottom: 12 }}>KYC Documents</Text>
             <View style={{ gap: 16 }}>
-              <Text style={{ color: colors.muted }}>Select documents to attach to this customer profile.</Text>
-              <Button label={aadhaarDoc ? `Selected: ${aadhaarDoc.name}` : "Select Aadhaar Document"} variant="secondary" onPress={() => void handlePick(setAadhaarDoc)} />
-              <Button label={panDoc ? `Selected: ${panDoc.name}` : "Select PAN Document"} variant="secondary" onPress={() => void handlePick(setPanDoc)} />
-              <Button label={addressProof ? `Selected: ${addressProof.name}` : "Select Address Proof"} variant="secondary" onPress={() => void handlePick(setAddressProof)} />
-              <Button label={photograph ? `Selected: ${photograph.name}` : "Select Photograph"} variant="secondary" onPress={() => void handlePick(setPhotograph)} />
-              <Button label={otherDocuments ? `Selected: ${otherDocuments.name}` : "Select Other Document"} variant="secondary" onPress={() => void handlePick(setOtherDocuments)} />
+              <Text style={{ color: colors.muted }}>Aadhaar, PAN, address proof, and photograph are required. Other documents are optional.</Text>
+              <Button label={aadhaarDoc ? `Selected: ${aadhaarDoc.name}` : "Select Aadhaar Document *"} variant="secondary" onPress={() => chooseDocumentSource("Aadhaar Document", setAadhaarDoc)} />
+              <Button label={panDoc ? `Selected: ${panDoc.name}` : "Select PAN Document *"} variant="secondary" onPress={() => chooseDocumentSource("PAN Document", setPanDoc)} />
+              <Button label={addressProof ? `Selected: ${addressProof.name}` : "Select Address Proof *"} variant="secondary" onPress={() => chooseDocumentSource("Address Proof", setAddressProof)} />
+              <Button label={photograph ? `Selected: ${photograph.name}` : "Select Photograph *"} variant="secondary" onPress={() => chooseDocumentSource("Photograph", setPhotograph, "image/*")} />
+              <Button label={otherDocuments ? `Selected: ${otherDocuments.name}` : "Select Other Document (Optional)"} variant="secondary" onPress={() => chooseDocumentSource("Other Document", setOtherDocuments)} />
             </View>
             <View style={{ flexDirection: "row", marginTop: 20, gap: 12 }}>
               <Button style={{ flex: 1 }} label="Back" variant="secondary" onPress={() => setStep(3)} disabled={busy} />
@@ -997,5 +1050,8 @@ const localStyles = StyleSheet.create({
   metricValue: { color: colors.dark, fontFamily: fonts.bold, fontSize: 14 },
   dateLabel: { color: colors.dark, fontFamily: fonts.semibold, fontSize: 13 },
   datePickerField: { minHeight: 54, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, backgroundColor: colors.white, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  suggestions: { borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, overflow: "hidden" },
+  suggestion: { paddingHorizontal: 14, paddingVertical: 12, backgroundColor: colors.white, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  suggestionText: { color: colors.dark, fontFamily: fonts.medium, fontSize: 13 },
   datePickerText: { color: colors.dark, fontFamily: fonts.regular, fontSize: 14 }
 });

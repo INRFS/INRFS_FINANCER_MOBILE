@@ -19,7 +19,7 @@ const faqs = [
 
 export function SupportScreen() {
   const route = useRoute<any>();
-  const loadTickets = useCallback(() => platformApi.support.list({ pageSize: 100 }), []);
+  const loadTickets = useCallback(() => platformApi.support.all(), []);
   const state = useRemote(loadTickets, { items: [] } as any);
   
   const [openFaqIndex, setOpenFaqIndex] = useState<number>(0);
@@ -59,9 +59,8 @@ export function SupportScreen() {
   };
 
   const handleCreate = async () => {
-    if (!subject.trim() || !description.trim()) {
-      return Alert.alert("Missing Fields", "Subject and description are required.");
-    }
+    if (subject.trim().length < 3 || subject.trim().length > 200) return Alert.alert("Invalid subject", "Subject must contain 3 to 200 characters.");
+    if (description.trim().length < 10 || description.trim().length > 4000) return Alert.alert("Invalid description", "Description must contain 10 to 4000 characters.");
     setSubmitting(true);
     try {
       await platformApi.support.create({
@@ -84,7 +83,8 @@ export function SupportScreen() {
   };
 
   const sendReply = async () => {
-    if (!reply.trim() || !selected) return;
+    if (!selected) return;
+    if (reply.trim().length < 1 || reply.trim().length > 4000) return Alert.alert("Invalid reply", "Reply must contain 1 to 4000 characters.");
     setSubmitting(true);
     try { 
       await platformApi.support.message(selected.id, { message: reply.trim(), isInternal: false }); 

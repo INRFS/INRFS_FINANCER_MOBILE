@@ -6,6 +6,7 @@ import { s } from "./styles";
 import { Ionicons } from "../../components/AppIcon";
 import { colors, fonts, radii, spacing } from "../../theme/tokens";
 import { shareCsv } from "../../services/nativeExport";
+import { localDateOnly } from "../../utils/date";
 
 const REPORT_TYPES = ['customers', 'loans', 'payments', 'interest-schedule', 'overdue'];
 const INTERNAL_COLUMNS = new Set(['id', 'createdBy', 'updatedBy', 'customerId', 'financerId', 'loanId', 'loanProductId']);
@@ -49,11 +50,14 @@ export function ReportsScreen() {
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
+    const validDate = (value: string) => { const parsed = new Date(`${value}T00:00:00Z`); return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0,10) === value; };
+    if ((from && !validDate(from)) || (to && !validDate(to))) { setError("Enter complete, real dates in YYYY-MM-DD format."); return; }
+    if (from && to && from > to) { setError("The From date must be on or before the To date."); return; }
     setLoading(true);
     setError('');
     try { 
       const [report, customerPayload, loanPayload, profile] = await Promise.all([
-        platformApi.reports.get(type, { search, from, to, pageSize: 100 }),
+        platformApi.reports.all(type, { search, from, to }),
         platformApi.customers.all(),
         platformApi.loans.all(),
         platformApi.profile.get(),
@@ -80,7 +84,7 @@ export function ReportsScreen() {
   const exportCsv = async () => {
     if (!rows.length) return;
     try {
-      await shareCsv(`${type}-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+      await shareCsv(`${type}-${localDateOnly()}.csv`, rows);
     } catch (e) {
       Alert.alert("Export Failed", e instanceof Error ? e.message : "Error");
     }
@@ -127,15 +131,15 @@ export function ReportsScreen() {
       </View>
 
       <Card style={styles.filterCard}>
-        <Field label="" value={search} onChangeText={setSearch} placeholder="Search records..." style={{ borderBottomWidth: 1, borderColor: colors.border, paddingBottom: 10, marginBottom: 10 }} />
+        <Field label="" value={search} onChangeText={setSearch} placeholder="Search records..." maxLength={100} style={{ borderBottomWidth: 1, borderColor: colors.border, paddingBottom: 10, marginBottom: 10 }} />
         <View style={[s.row, { marginBottom: 14 }]}>
           <View style={s.flex}>
             <Text style={styles.dateLabel}>FROM</Text>
-            <Field label="" value={from} onChangeText={setFrom} placeholder="YYYY-MM-DD" style={{ marginTop: 5 }} />
+            <Field label="" value={from} onChangeText={setFrom} placeholder="YYYY-MM-DD" maxLength={10} style={{ marginTop: 5 }} />
           </View>
           <View style={s.flex}>
             <Text style={styles.dateLabel}>TO</Text>
-            <Field label="" value={to} onChangeText={setTo} placeholder="YYYY-MM-DD" style={{ marginTop: 5 }} />
+            <Field label="" value={to} onChangeText={setTo} placeholder="YYYY-MM-DD" maxLength={10} style={{ marginTop: 5 }} />
           </View>
         </View>
         <Button label={loading ? 'Loading...' : 'Run Report'} onPress={() => void load()} loading={loading} />

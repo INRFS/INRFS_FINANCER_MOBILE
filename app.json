@@ -45,6 +45,14 @@
       ],
       "expo-asset",
       "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow INRFS Financer to select customer photographs.",
+          "cameraPermission": "Allow INRFS Financer to take customer photographs.",
+          "microphonePermission": false
+        }
+      ],
       "@react-native-community/datetimepicker"
     ],
     "extra": {

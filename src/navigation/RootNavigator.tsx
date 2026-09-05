@@ -30,7 +30,7 @@ export function RootNavigator() {
     const hasFinancerRole = hasRole("FinancerOwner", "FinancerManager", "LoanOfficer", "CollectionAgent");
     const admin = !user.financerId && hasAdminRole;
     const financer = hasFinancerRole && (Boolean(user.financerId) || !hasAdminRole);
-    if (showWelcome) return <FinancerWelcomeScreen navigation={{ replace: dismissWelcome } as never} route={{} as never}/>;
+    if (showWelcome && financer) return <FinancerWelcomeScreen navigation={{ replace: dismissWelcome } as never} route={{} as never}/>;
     if (admin) return <Stack.Navigator screenOptions={{ headerShown: false }}><Stack.Screen name="AdminApp" component={LiveAdminAppScreen} /></Stack.Navigator>;
     if (financer) return <Stack.Navigator screenOptions={{ headerShown: false }}><Stack.Screen name="FinancerApp" component={FinancerDrawerNavigator} /></Stack.Navigator>;
     return <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 16 }}><Text style={{ color: colors.dark, textAlign: "center" }}>Your account does not have access to an INRFS portal.</Text><Button label="Sign out" onPress={() => void logout()} /></View>;

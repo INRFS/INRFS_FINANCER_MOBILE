@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from "react";
+import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { useFocusEffect } from "@react-navigation/native";
-import { Alert, FlatList, Pressable, ScrollView, Text, View, Modal, StyleSheet } from "react-native";
+import { Alert, FlatList, Pressable, ScrollView, Text, View, Modal, Platform, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button, Card, DataRow, Field, Header, Screen, Segmented, KpiCard, Grid, Badge } from "../../components/ui";
 import { pageItems, platformApi } from "../../services/platformApi";
@@ -8,10 +9,16 @@ import { RemoteState, useRemote } from "./shared";
 import { s } from "./styles";
 import { Ionicons } from "../../components/AppIcon";
 import { colors, fonts } from "../../theme/tokens";
-import { interestForDays, rateForDays, formatInterestAmount } from "./loanInterest";
+import { interestForDays, rateForDays, formatInterestAmount, totalInterestForDuration } from "./loanInterest";
+import { formatInr } from "../../utils/format";
 
-const rupees = (v: unknown) => `₹${Number(v ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
-const dateOnly = () => new Date().toISOString().slice(0, 10);
+const rupees = formatInr;
+const dateValue = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
 const addLoanDuration = (startDate: string, value: string, unit: string) => {
   if (!startDate || Number(value) <= 0) return '';
@@ -30,12 +37,22 @@ const addLoanDuration = (startDate: string, value: string, unit: string) => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 };
 
-const dateDays = (from: string, to: string) => from && to ? Math.round((new Date(`${to}T00:00:00`).getTime() - new Date(`${from}T00:00:00`).getTime()) / 86400000) : 0;
 const firstInterestDue = (form: any, maturity: string) => {
   const candidate = form.interestFrequency === 'Daily' ? addLoanDuration(form.dateGiven, "1", 'Days')
     : form.interestFrequency === 'Weekly' ? addLoanDuration(form.dateGiven, "1", 'Weeks')
       : form.interestFrequency === 'Monthly' ? addLoanDuration(form.dateGiven, "1", 'Months') : maturity;
   return candidate && maturity && candidate < maturity ? candidate : maturity;
+};
+
+const loanCollectionType = (loan: any) => {
+  const raw = String(
+    loan.interestCollectionFrequency ?? loan.collectionFrequency ?? loan.collectionType ?? loan.type ?? loan.repaymentFrequency ?? ""
+  ).replace(/[\s_-]/g, "").toLowerCase();
+  if (raw === "daily" || raw === "dailycollection") return "Daily Collection";
+  if (raw === "weekly" || raw === "weeklycollection") return "Weekly Collection";
+  if (raw === "monthly" || raw === "monthlyinterest" || raw === "monthlycollection") return "Monthly Interest";
+  if (raw === "atmaturity" || raw === "maturity") return "At Maturity";
+  return "";
 };
 
 export function LoansScreen() {
@@ -52,7 +69,7 @@ export function LoansScreen() {
       return {
         ...loan,
         customerName: customer?.fullName ?? loan.customerName ?? loan.customerId,
-        type: loan.repaymentFrequency ?? loan.type ?? loan.collectionType ?? 'Monthly',
+        type: loanCollectionType(loan),
         interestRate: Number(loan.interestRate ?? loan.annualInterestRate ?? 0),
         outstanding: Number(loan.principalOutstanding ?? 0) + Number(loan.interestOutstanding ?? 0) + Number(loan.feesOutstanding ?? 0),
         dateGiven: loan.disbursementDate ?? loan.startDate,
@@ -114,7 +131,7 @@ export function LoansScreen() {
             <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20, paddingHorizontal: 20 }}>
               <View style={{ flexDirection: "row", gap: 8, paddingRight: 40 }}>
                 <Segmented options={["All", "Active", "Due", "Overdue", "Closed"]} value={statusFilter} onChange={setStatusFilter}/>
-                <Segmented options={["All", "Daily Collection", "Weekly Collection", "Monthly Interest"]} value={typeFilter} onChange={setTypeFilter}/>
+                <Segmented options={["All", "Daily Collection", "Weekly Collection", "Monthly Interest", "At Maturity"]} value={typeFilter} onChange={setTypeFilter}/>
               </View>
             </ScrollView>
             <RemoteState {...state} retry={() => void state.refresh()}/>
@@ -204,18 +221,26 @@ export function LoansScreen() {
 function AddLoanWizard({ customers, products, onCancel, onSaved }: { customers: any[], products: any[], onCancel: () => void, onSaved: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const [customerId, setCustomerId] = useState("");
-  const [principal, setPrincipal] = useState("0");
-  const [rate, setRate] = useState("0");
-  const [duration, setDuration] = useState("0");
+  const [principal, setPrincipal] = useState("");
+  const [rate, setRate] = useState("");
+  const [duration, setDuration] = useState("");
   const [durationUnit, setDurationUnit] = useState("Days");
   const [frequency, setFrequency] = useState("Daily");
-  const [startDate, setStartDate] = useState(dateOnly());
+  const [startDate, setStartDate] = useState("");
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [adminCollectionMonitoring, setAdminCollectionMonitoring] = useState(false);
 
   const product = products.find((x: any) => x.isActive !== false) ?? products[0];
   const [isCustomerSelectorOpen, setIsCustomerSelectorOpen] = useState(false);
   
   const customerName = customers.find(x => x.id === customerId)?.fullName || "Select a customer";
+  const selectedStartDate = /^\d{4}-\d{2}-\d{2}$/.test(startDate)
+    ? new Date(`${startDate}T00:00:00`)
+    : new Date();
+  const selectStartDate = (event: DateTimePickerEvent, date?: Date) => {
+    if (Platform.OS === "android") setShowStartDatePicker(false);
+    if (event.type !== "dismissed" && date) setStartDate(dateValue(date));
+  };
 
   // Calculations mirroring web
   const maturityDate = addLoanDuration(startDate, duration, durationUnit);
@@ -230,20 +255,23 @@ function AddLoanWizard({ customers, products, onCancel, onSaved }: { customers: 
   const weeklyAmount = interestForDays(amountNum, rateNum, 7);
   const monthlyAmount = Math.round((amountNum * rateNum / 100 + Number.EPSILON) * 100) / 100;
 
-  const totalDays = dateDays(startDate, maturityDate);
-  const estimatedTotalInterest = interestForDays(amountNum, rateNum, totalDays);
+  const estimatedTotalInterest = totalInterestForDuration(amountNum, rateNum, duration, durationUnit);
   
   const firstDue = firstInterestDue({ interestFrequency: frequency, dateGiven: startDate }, maturityDate);
 
   const save = async () => {
-    if (!customerId || !principal || !duration || Number(principal) <= 0 || Number(duration) <= 0) {
+    const principalAmount = Number(principal); const monthlyRate = Number(rate); const durationValue = Number(duration);
+    if (!customerId || !principal.trim() || !rate.trim() || !duration.trim() || !startDate.trim()) {
       return Alert.alert("Missing Fields", "Please select a customer and enter valid loan details.");
     }
     if (!product) {
       return Alert.alert("No Product", "No active loan product is configured.");
     }
-    if (Number(rate) < 0) return Alert.alert("Invalid rate", "Enter a valid monthly interest rate.");
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !maturityDate) return Alert.alert("Invalid date", "Enter the start date as YYYY-MM-DD.");
+    if (!Number.isFinite(principalAmount) || principalAmount <= 0 || principalAmount > 1_000_000_000) return Alert.alert("Invalid principal", "Enter an amount greater than 0 and not more than ₹1,000,000,000.");
+    if (!Number.isFinite(monthlyRate) || monthlyRate < 0 || monthlyRate > 100) return Alert.alert("Invalid rate", "Monthly interest rate must be between 0 and 100 percent.");
+    if (!Number.isInteger(durationValue) || durationValue < 1 || durationValue > 3650) return Alert.alert("Invalid duration", "Duration must be a whole number between 1 and 3650.");
+    const parsedStart = new Date(`${startDate}T00:00:00Z`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || Number.isNaN(parsedStart.getTime()) || parsedStart.toISOString().slice(0,10) !== startDate || !maturityDate) return Alert.alert("Invalid date", "Enter a real start date as YYYY-MM-DD.");
     setBusy(true);
     try {
       await platformApi.loans.create({
@@ -285,21 +313,40 @@ function AddLoanWizard({ customers, products, onCancel, onSaved }: { customers: 
         <Card>
           <Text style={s.label}>Loan Details</Text>
           <View style={s.gap}>
-            <Field label="Principal Amount (₹) *" value={principal} onChangeText={setPrincipal} keyboardType="number-pad"/>
-            <Field label="Interest Rate (% per month) *" value={rate} onChangeText={setRate} keyboardType="decimal-pad"/>
+            <Field label="Principal Amount (₹) *" value={principal} onChangeText={v=>setPrincipal(v.replace(/[^\d.]/g,""))} keyboardType="decimal-pad" maxLength={15}/>
+            <Field label="Interest Rate (% per month) *" value={rate} onChangeText={v=>setRate(v.replace(/[^\d.]/g,""))} keyboardType="decimal-pad" maxLength={6}/>
             
             <View>
               <Text style={s.label}>Duration Unit *</Text>
               <Segmented options={["Days", "Weeks", "Months"]} value={durationUnit} onChange={setDurationUnit}/>
             </View>
-            <Field label="Duration Value *" value={duration} onChangeText={setDuration} keyboardType="number-pad"/>
+            <Field label="Duration Value *" value={duration} onChangeText={v=>setDuration(v.replace(/\D/g,""))} keyboardType="number-pad" maxLength={4}/>
             
             <View>
               <Text style={s.label}>Collection Frequency *</Text>
               <Segmented options={["Daily", "Weekly", "Monthly", "AtMaturity"]} value={frequency} onChange={setFrequency}/>
             </View>
             
-            <Field label="Start Date *" value={startDate} onChangeText={setStartDate} placeholder="YYYY-MM-DD" />
+            <View style={s.gap}>
+              <Text style={s.label}>Start Date *</Text>
+              <Button
+                label={startDate || "Select start date"}
+                icon="calendar-outline"
+                variant="secondary"
+                onPress={() => setShowStartDatePicker(true)}
+              />
+              {showStartDatePicker ? (
+                <>
+                  <DateTimePicker
+                    value={selectedStartDate}
+                    mode="date"
+                    display={Platform.OS === "ios" ? "spinner" : "calendar"}
+                    onChange={selectStartDate}
+                  />
+                  {Platform.OS === "ios" ? <Button label="Done" variant="ghost" onPress={() => setShowStartDatePicker(false)}/> : null}
+                </>
+              ) : null}
+            </View>
           </View>
         </Card>
 

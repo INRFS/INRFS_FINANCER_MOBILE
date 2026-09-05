@@ -6,8 +6,10 @@ import { Badge, Button, Card, Field, Header, Screen, Segmented } from "../../com
 import { pageItems, platformApi } from "../../services/platformApi";
 import { colors, fonts, radii, spacing } from "../../theme/tokens";
 import { RemoteState, useRemote } from "./shared";
+import { localDateOnly } from "../../utils/date";
+import { formatInr } from "../../utils/format";
 
-const rupees = (value: unknown) => `₹${Number(value ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+const rupees = formatInr;
 
 export function InterestScheduleScreen() {
   const load = useCallback(async () => {
@@ -48,7 +50,7 @@ export function InterestScheduleScreen() {
       const headings = ["Loan", "Customer", "Principal", "Interest rate", "Interest", "Due date", "Status"];
       const data = rows.map(item => [item.loanNumber, item.customer, item.principal, item.rate, item.interestAmount, item.dueDate, item.status]);
       const csv = [headings, ...data].map(row => row.map(value => `"${String(value ?? "").replaceAll('"', '""')}"`).join(",")).join("\r\n");
-      const fileName = `interest-schedule-${new Date().toISOString().slice(0, 10)}.csv`;
+      const fileName = `interest-schedule-${localDateOnly()}.csv`;
       const uri = `${FileSystem.cacheDirectory}${fileName}`;
       await FileSystem.writeAsStringAsync(uri, csv, { encoding: FileSystem.EncodingType.UTF8 });
       if (!await Sharing.isAvailableAsync()) throw new Error("File sharing is unavailable on this device.");

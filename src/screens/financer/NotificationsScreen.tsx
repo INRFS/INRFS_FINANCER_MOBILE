@@ -10,7 +10,7 @@ import { colors, fonts, spacing, radii, shadows } from "../../theme/tokens";
 export function NotificationsScreen() {
   const navigation = useNavigation<any>();
 
-  const load = useCallback(() => platformApi.notifications.list({ pageSize: 100 }), []);
+  const load = useCallback(() => platformApi.notifications.all(), []);
   const state = useRemote(load, { items: [] } as any);
   
   const [activeCategory, setActiveCategory] = useState("All");

@@ -8,10 +8,12 @@ import { Ionicons } from "../../components/AppIcon";
 import Svg, { Rect, G, Text as SvgText, Path, Circle } from "react-native-svg";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRemote, RemoteState } from "./shared";
+import { localDateOnly } from "../../utils/date";
+import { formatInr } from "../../utils/format";
 
 const { width } = Dimensions.get("window");
 
-const rupees = (v: unknown) => `₹${Number(v ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+const rupees = formatInr;
 
 const getCoordinatesForPercent = (percent: number) => {
   const x = Math.cos(2 * Math.PI * percent);
@@ -221,7 +223,7 @@ export function DashboardScreen() {
                 </View>
                 <View style={styles.statContent}>
                   <Text style={styles.statLabel}>TOTAL CUSTOMERS</Text>
-                  <Text style={styles.statValue}>{d.totalCustomers ?? 0}</Text>
+                  <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>{d.totalCustomers ?? 0}</Text>
                 </View>
               </View>
 
@@ -231,7 +233,7 @@ export function DashboardScreen() {
                 </View>
                 <View style={styles.statContent}>
                   <Text style={styles.statLabel}>ACTIVE LOANS</Text>
-                  <Text style={styles.statValue}>{d.activeLoans ?? 0}</Text>
+                  <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>{d.activeLoans ?? 0}</Text>
                 </View>
               </View>
 
@@ -241,7 +243,7 @@ export function DashboardScreen() {
                 </View>
                 <View style={styles.statContent}>
                   <Text style={styles.statLabel}>TOTAL GIVEN</Text>
-                  <Text style={styles.statValue}>{rupees(d.totalPrincipal ?? 0)}</Text>
+                  <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>{rupees(d.totalPrincipal ?? 0)}</Text>
                 </View>
               </View>
 
@@ -251,7 +253,7 @@ export function DashboardScreen() {
                 </View>
                 <View style={styles.statContent}>
                   <Text style={styles.statLabel}>OUTSTANDING</Text>
-                  <Text style={styles.statValue}>{rupees(d.principalOutstanding ?? 0)}</Text>
+                  <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>{rupees(d.principalOutstanding ?? 0)}</Text>
                 </View>
               </View>
 
@@ -307,7 +309,7 @@ export function DashboardScreen() {
                           <Text style={styles.paymentCustomer}>{row.customer}</Text>
                           <Text style={styles.paymentLoanId}>{row.loanNumber ?? row.displayId ?? row.loanId}</Text>
                         </View>
-                        <Badge status={(row.status || (String(row.dueDate).slice(0, 10) <= new Date().toISOString().slice(0, 10) ? "Due" : "Upcoming")) as any} />
+                        <Badge status={(row.status || (String(row.dueDate).slice(0, 10) <= localDateOnly() ? "Due" : "Upcoming")) as any} />
                       </View>
                       
                       <View style={styles.paymentDetails}>
@@ -362,8 +364,8 @@ export function DashboardScreen() {
                 
                 <View style={styles.modalInfoBox}>
                   <View style={styles.modalInfoRow}>
-                    <Text style={styles.modalInfoLabel}>Loan ID:</Text>
-                    <Text style={styles.modalInfoValue}>{recordModalItem.loanId}</Text>
+                    <Text style={styles.modalInfoLabel}>Loan Number:</Text>
+                    <Text style={styles.modalInfoValue}>{recordModalItem.loanNumber ?? recordModalItem.displayId ?? recordModalItem.loanId}</Text>
                   </View>
                   <View style={styles.modalInfoRow}>
                     <Text style={styles.modalInfoLabel}>Due Amount:</Text>
@@ -488,9 +490,9 @@ const styles = StyleSheet.create({
   modalBody: { padding: 20, gap: 20 },
   modalSubtitle: { color: colors.muted, fontFamily: fonts.medium, fontSize: 14, marginTop: -10 },
   modalInfoBox: { backgroundColor: colors.background, padding: 14, borderRadius: radii.md, gap: 8 },
-  modalInfoRow: { flexDirection: "row", justifyContent: "space-between" },
-  modalInfoLabel: { color: colors.muted, fontFamily: fonts.medium, fontSize: 13 },
-  modalInfoValue: { color: colors.dark, fontFamily: fonts.bold, fontSize: 14 },
+  modalInfoRow: { minWidth: 0, flexDirection: "row", justifyContent: "space-between", gap: 10 },
+  modalInfoLabel: { flexShrink: 0, color: colors.muted, fontFamily: fonts.medium, fontSize: 13 },
+  modalInfoValue: { flex: 1, minWidth: 0, color: colors.dark, fontFamily: fonts.bold, fontSize: 14, textAlign: "right" },
   
   fieldWrap: { gap: 8 },
   label: { color: "#334155", fontFamily: fonts.semibold, fontSize: 12, letterSpacing: 0.1 },

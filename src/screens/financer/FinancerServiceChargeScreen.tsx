@@ -8,8 +8,11 @@ import { pageItems, platformApi } from "../../services/platformApi";
 import { s } from "./styles";
 import { Ionicons } from "../../components/AppIcon";
 import { colors, fonts, radii, spacing } from "../../theme/tokens";
+import { formatInr } from "../../utils/format";
+import { groupServiceCharges, withLiveInterestCollected } from "../../utils/serviceCharge";
+import { localDateOnly } from "../../utils/date";
 
-const formatCurrency = (value: any) => `₹${Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+const formatCurrency = formatInr;
 
 export function FinancerServiceChargeScreen() {
   const [billing, setBilling] = useState<any[]>([]);
@@ -21,18 +24,13 @@ export function FinancerServiceChargeScreen() {
     setLoading(true);
     setPageError('');
     try {
-      const payload = await platformApi.admin.invoices({ pageSize: 200 });
-      setBilling(pageItems(payload).map((item: any) => ({
-        ...item,
-        month: item.periodStart 
-          ? new Date(`${item.periodStart}T00:00:00`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
-          : "Unknown",
-        interestCollected: item.interestActivity,
-        chargeRate: item.chargePercentage,
-        amountPayable: item.chargeAmount,
-        amountPaid: item.collectedAmount || 0,
-        outstanding: Number(item.chargeAmount || 0) - Number(item.collectedAmount || 0)
-      })));
+      const [invoicePayload, paymentPayload] = await Promise.all([
+        platformApi.admin.allInvoices(),
+        platformApi.payments.all(),
+      ]);
+      const grouped = groupServiceCharges(pageItems(invoicePayload), localDateOnly());
+      const payments = pageItems(paymentPayload);
+      setBilling(grouped.map((item, index) => index === 0 ? withLiveInterestCollected(item, payments) : item));
     } catch (e) {
       setPageError(e instanceof Error ? e.message : "Failed to load service charges.");
     } finally {
@@ -99,7 +97,7 @@ export function FinancerServiceChargeScreen() {
         </View>
       ) : (
         <FlatList
-          data={billing.slice(1)} // All items except the first one which is currentBilling
+          data={billing}
           keyExtractor={(item, index) => String(
             item.id
               ?? item.invoiceId
