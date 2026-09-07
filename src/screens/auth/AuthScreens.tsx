@@ -107,7 +107,7 @@ export function FinancerRegisterScreen({ navigation }: RegisterProps) {
     setSubmitting(true); setError("");
     try {
       const challenge = await api.post("/auth/register/financer", { fullName: form.name.trim(), businessName: form.business.trim(), mobile, email: form.email.trim().toLowerCase(), city: form.city.trim(), state: form.state.trim() }, { auth: false });
-      navigation.navigate("FinancerOtp", { mobile: form.email.trim().toLowerCase(), challengeId: challenge.challengeId, registering: true });
+      navigation.navigate("FinancerOtp", { email: form.email.trim().toLowerCase(), challengeId: challenge.challengeId, registering: true });
     } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Unable to create the account."); }
     finally { setSubmitting(false); }
   };
@@ -136,8 +136,8 @@ export function FinancerOtpScreen({ navigation, route }: OtpProps) {
     } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "OTP verification failed."); }
     finally { setSubmitting(false); }
   };
-  const resend = async () => { setOtp(""); setError(""); setSubmitting(true); try { const challenge = await api.post("/auth/otp/request", { destination: route.params.mobile, purpose: route.params.registering ? "Registration" : "Login" }, { auth: false }); setChallengeId(challenge.challengeId); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Unable to resend the OTP."); } finally { setSubmitting(false); } };
-  return <AuthShell><Logo size={44} /><IconBubble icon="call-outline" accent="cyan" size={64} /><View style={styles.authHeading}><Text style={styles.authTitle}>Verify your {route.params.admin ? "email" : "mobile number"}</Text><Text style={styles.authSub}>Enter the 6-digit OTP sent to your registered contact.</Text><Text style={styles.mobileText}>{route.params.mobile}</Text></View><Field label="6-digit OTP" placeholder="• • • • • •" keyboardType="number-pad" maxLength={6} value={otp} onChangeText={(v) => { setOtp(v.replace(/\D/g, "")); setError(""); }} error={error} /><Button loading={submitting} label="Verify OTP" onPress={verify} /><View style={styles.twoButtons}><Button disabled={submitting} label="Resend OTP" variant="secondary" style={styles.flex} onPress={() => void resend()} /><Button disabled={submitting} label="Change Number" variant="secondary" style={styles.flex} onPress={() => navigation.replace(route.params.registering ? "FinancerRegister" : route.params.admin ? "AdminLogin" : "FinancerLogin")} /></View></AuthShell>;
+  const resend = async () => { setOtp(""); setError(""); setSubmitting(true); try { const challenge = await api.post("/auth/otp/request", { destination: route.params.email, purpose: route.params.registering ? "Registration" : "Login" }, { auth: false }); setChallengeId(challenge.challengeId); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Unable to resend the OTP."); } finally { setSubmitting(false); } };
+  return <AuthShell><Logo size={44} /><IconBubble icon="mail-outline" accent="cyan" size={64} /><View style={styles.authHeading}><Text style={styles.authTitle}>Verify your email address</Text><Text style={styles.authSub}>Enter the 6-digit OTP sent to your registered email address.</Text><Text style={styles.mobileText}>{route.params.email}</Text></View><Field label="6-digit OTP" placeholder="• • • • • •" keyboardType="number-pad" maxLength={6} value={otp} onChangeText={(v) => { setOtp(v.replace(/\D/g, "")); setError(""); }} error={error} /><Button loading={submitting} label="Verify OTP" onPress={verify} /><View style={styles.twoButtons}><Button disabled={submitting} label="Resend OTP" variant="secondary" style={styles.flex} onPress={() => void resend()} /><Button disabled={submitting} label="Change Email" variant="secondary" style={styles.flex} onPress={() => navigation.replace(route.params.registering ? "FinancerRegister" : route.params.admin ? "AdminLogin" : "FinancerLogin")} /></View></AuthShell>;
 }
 
 type WelcomeProps = NativeStackScreenProps<RootStackParamList, "FinancerWelcome">;
@@ -154,7 +154,7 @@ export function AdminLoginScreen({ navigation }: AdminProps) {
     if (!password) return setError("Enter your password.");
     if (password.length > 128) return setError("Password cannot exceed 128 characters.");
     setSubmitting(true); setError("");
-    try { const normalizedEmail = email.trim().toLowerCase(); const challenge = await api.post("/auth/login", { email: normalizedEmail, password, portal: "admin" }, { auth: false }); navigation.navigate("FinancerOtp", { mobile: normalizedEmail, challengeId: challenge.challengeId, admin: true }); }
+    try { const normalizedEmail = email.trim().toLowerCase(); const challenge = await api.post("/auth/login", { email: normalizedEmail, password, portal: "admin" }, { auth: false }); navigation.navigate("FinancerOtp", { email: normalizedEmail, challengeId: challenge.challengeId, admin: true }); }
     catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Unable to sign in."); }
     finally { setSubmitting(false); }
   };

@@ -1,13 +1,13 @@
 import React, { useCallback, useMemo, useState } from "react";
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
-import { Alert, FlatList, Pressable, ScrollView, Text, View, Modal, StyleSheet, TextInput, KeyboardAvoidingView, Platform } from "react-native";
+import { Alert, FlatList, Pressable, ScrollView, Text, View, Modal, StyleSheet, TextInput, KeyboardAvoidingView, Platform, Image } from "react-native";
 import { Button, Card, DataRow, Field, Header, Screen, Segmented, Badge, KpiCard, Grid } from "../../components/ui";
 import { pageItems, platformApi } from "../../services/platformApi";
 import { RemoteState, useRemote } from "./shared";
 import { Ionicons } from "../../components/AppIcon";
 import { colors, fonts, radii, spacing } from "../../theme/tokens";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { downloadAndShareDocument, pickAndUploadDocument, pickDocument, takePhoto, uploadPickedDocument } from "../../services/nativeDocuments";
+import { downloadAndShareDocument, pickAndUploadDocument, pickDocument, previewPickedDocument, takePhoto, uploadPickedDocument, type PickedDocument } from "../../services/nativeDocuments";
 import { localDateOnly } from "../../utils/date";
 import { formatInr } from "../../utils/format";
 import { collectionInterestForFrequency, totalInterestForDuration } from "./loanInterest";
@@ -38,6 +38,31 @@ const getLoanNextDueDate = (loan: any) => {
     .map((schedule: any) => schedule.dueDate)
     .filter(Boolean)
     .sort((a: string, b: string) => new Date(a).getTime() - new Date(b).getTime())[0] ?? null;
+};
+
+const getLoanProgress = (loan: any) => {
+  const schedules = (loan.schedules ?? []).filter(
+    (item: any) => String(item.status ?? '').toLowerCase() !== 'cancelled'
+  );
+  const paidStatuses = new Set(['paid', 'success', 'completed', 'settled']);
+  const paidFromSchedule = schedules.filter((item: any) => paidStatuses.has(String(item.status ?? '').toLowerCase())).length;
+  const declaredTotal = Number(loan.totalInstallments ?? loan.installmentCount ?? 0);
+  const totalInstallments = Math.max(declaredTotal, schedules.length);
+  const paidInstallments = Math.min(Number(loan.paidInstallments ?? paidFromSchedule), totalInstallments || paidFromSchedule);
+  const pendingInstallments = Math.max(0, Number(loan.pendingInstallments ?? (totalInstallments - paidInstallments)));
+  const duration = Number(loan.durationValue || 0);
+  const unit = String(loan.durationUnit || 'Months').toLowerCase();
+  const convertedMonths = unit === 'days' ? duration / 30 : unit === 'weeks' ? duration * 7 / 30 : duration;
+  const startDate = new Date(loan.startDate ?? loan.disbursementDate ?? '');
+  const maturityDate = new Date(loan.maturityDate ?? '');
+  let maturityMonths = 0;
+  if (!Number.isNaN(startDate.getTime()) && !Number.isNaN(maturityDate.getTime()) && maturityDate > startDate) {
+    maturityMonths = (maturityDate.getUTCFullYear() - startDate.getUTCFullYear()) * 12
+      + maturityDate.getUTCMonth() - startDate.getUTCMonth();
+    if (maturityDate.getUTCDate() > startDate.getUTCDate()) maturityMonths += 1;
+  }
+  const tenureMonths = Math.max(0, Math.ceil(Number(loan.tenureMonths || convertedMonths || maturityMonths || 0)));
+  return { paidInstallments, pendingInstallments, tenureMonths };
 };
 
 const addLoanDuration = (startDate: string, value: string, unit: string) => {
@@ -405,7 +430,9 @@ function LoansTab({ loans }: { loans: any[] }) {
   if (!loans.length) return <EmptyState icon="cash-outline" message="No loan accounts for this customer." />;
   return (
     <View style={{ gap: 12 }}>
-      {loans.map(loan => (
+      {loans.map(loan => {
+        const progress = getLoanProgress(loan);
+        return (
         <Card key={loan.id} style={{ padding: 16 }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 12 }}>
             <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.dark }}>{loan.displayId || loan.loanNumber || loan.id}</Text>
@@ -417,9 +444,13 @@ function LoansTab({ loans }: { loans: any[] }) {
             <View style={{ width: "45%" }}><Text style={localStyles.metricLabel}>Frequency</Text><Text style={localStyles.metricValue}>{loan.interestCollectionFrequency || loan.frequency}</Text></View>
             <View style={{ width: "45%" }}><Text style={localStyles.metricLabel}>Start Date</Text><Text style={localStyles.metricValue}>{formatDate(getLoanStartDate(loan))}</Text></View>
             <View style={{ width: "45%" }}><Text style={localStyles.metricLabel}>Next Due</Text><Text style={localStyles.metricValue}>{formatDate(getLoanNextDueDate(loan))}</Text></View>
+            <View style={{ width: "45%" }}><Text style={localStyles.metricLabel}>Installments Paid</Text><Text style={localStyles.metricValue}>{progress.paidInstallments}</Text></View>
+            <View style={{ width: "45%" }}><Text style={localStyles.metricLabel}>Installments Pending</Text><Text style={localStyles.metricValue}>{progress.pendingInstallments}</Text></View>
+            <View style={{ width: "45%" }}><Text style={localStyles.metricLabel}>Total Tenure</Text><Text style={localStyles.metricValue}>{progress.tenureMonths ? `${progress.tenureMonths} months` : "-"}</Text></View>
           </View>
         </Card>
-      ))}
+        );
+      })}
     </View>
   );
 }
@@ -855,6 +886,7 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
   const [addressProof, setAddressProof] = useState<any>(null);
   const [photograph, setPhotograph] = useState<any>(null);
   const [otherDocuments, setOtherDocuments] = useState<any>(null);
+  const [previewDocument, setPreviewDocument] = useState<PickedDocument | null>(null);
   const [citySuggestions, setCitySuggestions] = useState<AddressMatch[]>([]);
   const [stateSuggestions, setStateSuggestions] = useState<AddressMatch[]>([]);
   const [pinLookupMessage, setPinLookupMessage] = useState("");
@@ -961,6 +993,25 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
     { text: "Cancel", style: "cancel" },
   ]);
 
+  const preview = async (document: PickedDocument) => {
+    if (document.mimeType.startsWith("image/")) {
+      setPreviewDocument(document);
+      return;
+    }
+    try {
+      await previewPickedDocument(document);
+    } catch (error) {
+      Alert.alert("Preview unavailable", error instanceof Error ? error.message : "Could not preview this document.");
+    }
+  };
+
+  const documentRow = (document: PickedDocument | null, emptyLabel: string, choose: () => void) => (
+    <View style={{ gap: 8 }}>
+      <Button label={document ? `Selected: ${document.name}` : emptyLabel} variant="secondary" onPress={choose} />
+      {document ? <Button label="Preview" variant="ghost" onPress={() => void preview(document)} /> : null}
+    </View>
+  );
+
   return (
     <Screen>
       <Header title={`Add Customer (Step ${step}/4)`} action={<Button label="Cancel" variant="ghost" onPress={onCancel} />} />
@@ -1023,11 +1074,11 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
             <Text style={{ fontFamily: fonts.bold, fontSize: 16, marginBottom: 12 }}>KYC Documents</Text>
             <View style={{ gap: 16 }}>
               <Text style={{ color: colors.muted }}>Aadhaar, PAN, address proof, and photograph are required. Other documents are optional.</Text>
-              <Button label={aadhaarDoc ? `Selected: ${aadhaarDoc.name}` : "Select Aadhaar Document *"} variant="secondary" onPress={() => chooseDocumentSource("Aadhaar Document", setAadhaarDoc)} />
-              <Button label={panDoc ? `Selected: ${panDoc.name}` : "Select PAN Document *"} variant="secondary" onPress={() => chooseDocumentSource("PAN Document", setPanDoc)} />
-              <Button label={addressProof ? `Selected: ${addressProof.name}` : "Select Address Proof *"} variant="secondary" onPress={() => chooseDocumentSource("Address Proof", setAddressProof)} />
-              <Button label={photograph ? `Selected: ${photograph.name}` : "Select Photograph *"} variant="secondary" onPress={() => chooseDocumentSource("Photograph", setPhotograph, "image/*")} />
-              <Button label={otherDocuments ? `Selected: ${otherDocuments.name}` : "Select Other Document (Optional)"} variant="secondary" onPress={() => chooseDocumentSource("Other Document", setOtherDocuments)} />
+              {documentRow(aadhaarDoc, "Select Aadhaar Document *", () => chooseDocumentSource("Aadhaar Document", setAadhaarDoc))}
+              {documentRow(panDoc, "Select PAN Document *", () => chooseDocumentSource("PAN Document", setPanDoc))}
+              {documentRow(addressProof, "Select Address Proof *", () => chooseDocumentSource("Address Proof", setAddressProof))}
+              {documentRow(photograph, "Select Photograph *", () => chooseDocumentSource("Photograph", setPhotograph, "image/*"))}
+              {documentRow(otherDocuments, "Select Other Document (Optional)", () => chooseDocumentSource("Other Document", setOtherDocuments))}
             </View>
             <View style={{ flexDirection: "row", marginTop: 20, gap: 12 }}>
               <Button style={{ flex: 1 }} label="Back" variant="secondary" onPress={() => setStep(3)} disabled={busy} />
@@ -1036,6 +1087,15 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
           </Card>
         )}
       </ScrollView>
+      <Modal visible={previewDocument !== null} transparent animationType="fade" onRequestClose={() => setPreviewDocument(null)}>
+        <View style={localStyles.previewOverlay}>
+          <View style={localStyles.previewCard}>
+            <Text style={localStyles.previewTitle}>{previewDocument?.name}</Text>
+            {previewDocument ? <Image source={{ uri: previewDocument.uri }} style={localStyles.previewImage} resizeMode="contain" /> : null}
+            <Button label="Close Preview" onPress={() => setPreviewDocument(null)} />
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -1053,5 +1113,9 @@ const localStyles = StyleSheet.create({
   suggestions: { borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, overflow: "hidden" },
   suggestion: { paddingHorizontal: 14, paddingVertical: 12, backgroundColor: colors.white, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   suggestionText: { color: colors.dark, fontFamily: fonts.medium, fontSize: 13 },
+  previewOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.75)", justifyContent: "center", padding: 20 },
+  previewCard: { height: "90%", maxHeight: 640, padding: 16, gap: 14, borderRadius: radii.lg, backgroundColor: colors.white },
+  previewTitle: { color: colors.dark, fontFamily: fonts.bold, fontSize: 15 },
+  previewImage: { width: "100%", flex: 1, minHeight: 160, backgroundColor: colors.background, borderRadius: radii.md },
   datePickerText: { color: colors.dark, fontFamily: fonts.regular, fontSize: 14 }
 });

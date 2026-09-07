@@ -83,6 +83,27 @@ export async function downloadAndShareDocument(id: string, originalFileName = "d
   return result.uri;
 }
 
+export async function previewPickedDocument(asset: PickedDocument) {
+  if (Platform.OS === "android") {
+    try {
+      const contentUri = await FileSystem.getContentUriAsync(asset.uri);
+      await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
+        data: contentUri,
+        flags: 1,
+        type: asset.mimeType,
+      });
+      return;
+    } catch {
+      // Fall through to the platform share sheet when no viewer is installed.
+    }
+  }
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(asset.uri, { dialogTitle: `Preview ${asset.name}`, mimeType: asset.mimeType });
+    return;
+  }
+  throw new Error("No application is available to preview this document.");
+}
+
 export async function takePhoto(allowsEditing = false): Promise<PickedDocument | null> {
   const permission = await ImagePicker.requestCameraPermissionsAsync();
   if (!permission.granted) throw new Error("Camera permission is required to take a customer photograph.");

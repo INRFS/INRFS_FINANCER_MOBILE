@@ -333,7 +333,7 @@ export function FinancerSettingsScreen() {
         <Card>
           <Text style={s.sectionTitle}>SECURITY</Text>
           <Text style={s.securityDesc}>
-            Your account uses Mobile OTP authentication. No password is required.
+            Your account uses email OTP authentication.
           </Text>
           
           <View style={s.securityStatusBox}>

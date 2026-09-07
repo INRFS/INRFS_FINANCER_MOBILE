@@ -19,7 +19,7 @@ export type RootStackParamList = {
   PortalSelection: undefined;
   FinancerLogin: undefined;
   FinancerRegister: undefined;
-  FinancerOtp: { mobile: string; challengeId: string; registering?: boolean; admin?: boolean };
+  FinancerOtp: { email: string; challengeId: string; registering?: boolean; admin?: boolean };
   FinancerWelcome: undefined;
   FinancerApp: NavigatorScreenParams<FinancerDrawerParamList> | undefined;
   AdminLogin: undefined;

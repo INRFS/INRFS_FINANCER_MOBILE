@@ -55,15 +55,42 @@ const loanCollectionType = (loan: any) => {
   return "";
 };
 
+const installmentSummary = (loan: any) => {
+  const normalizedStatus = (status: unknown) => typeof status === "number"
+    ? ["upcoming", "due", "partiallypaid", "paid", "overdue", "waived"][status] ?? ""
+    : String(status ?? "").replace(/[\s_-]/g, "").toLowerCase();
+  const schedules = Array.isArray(loan.schedules) ? loan.schedules : [];
+  const activeSchedules = schedules.filter((item: any) => !["cancelled", "waived"].includes(normalizedStatus(item.status)));
+  const paidFromSchedule = activeSchedules.filter((item: any) => ["paid", "success", "completed", "settled"].includes(normalizedStatus(item.status))).length;
+  const declaredTotal = Number(loan.totalInstallments ?? loan.installmentCount ?? 0);
+  const total = Math.max(declaredTotal, activeSchedules.length);
+  const paid = Number(loan.paidInstallments ?? paidFromSchedule);
+  const pending = Math.max(0, Number(loan.pendingInstallments ?? total - paid));
+  const durationValue = Number(loan.durationValue || 0);
+  const tenure = durationValue > 0
+    ? `${durationValue} ${loan.durationUnit || "Months"}`
+    : Number(loan.tenureMonths) > 0 ? `${loan.tenureMonths} Months` : "-";
+  const nextSchedule = activeSchedules.find((item: any) => !["paid", "success", "completed", "settled"].includes(normalizedStatus(item.status))) ?? activeSchedules[0];
+  const installmentAmount = Number(loan.installmentAmount ?? nextSchedule?.amountDue ?? nextSchedule?.totalDue ?? 0);
+  return { total, paid, pending, tenure, installmentAmount };
+};
+
 export function LoansScreen() {
   const load = useCallback(async () => {
-    const [loans, customers, products] = await Promise.all([
+    const [loans, customers, products, schedules] = await Promise.all([
       platformApi.loans.all(), 
       platformApi.customers.all(), 
-      platformApi.loans.products()
+      platformApi.loans.products(),
+      platformApi.payments.allSchedules(),
     ]);
     const customerItems = pageItems(customers);
     const customerById = new Map(customerItems.map((customer: any) => [customer.id, customer]));
+    const schedulesByLoan = new Map<string, any[]>();
+    pageItems(schedules).forEach((schedule: any) => {
+      const group = schedulesByLoan.get(schedule.loanId) ?? [];
+      group.push(schedule);
+      schedulesByLoan.set(schedule.loanId, group);
+    });
     const loanItems = pageItems(loans).map((loan: any) => {
       const customer: any = customerById.get(loan.customerId);
       return {
@@ -73,6 +100,7 @@ export function LoansScreen() {
         interestRate: Number(loan.interestRate ?? loan.annualInterestRate ?? 0),
         outstanding: Number(loan.principalOutstanding ?? 0) + Number(loan.interestOutstanding ?? 0) + Number(loan.feesOutstanding ?? 0),
         dateGiven: loan.disbursementDate ?? loan.startDate,
+        schedules: schedulesByLoan.get(loan.id) ?? [],
       };
     });
     return { loans: loanItems, customers: customerItems, products: pageItems(products) };
@@ -90,6 +118,7 @@ export function LoansScreen() {
   
   const [isAdding, setIsAdding] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<any>(null);
+  const selectedSummary = selectedLoan ? installmentSummary(selectedLoan) : null;
 
   const rows = useMemo(() => {
     return state.data.loans.filter((x: any) => {
@@ -193,6 +222,13 @@ export function LoansScreen() {
                 <Text style={s.label}>Loan Summary</Text>
                 <DataRow title="Principal Amount" amount={rupees(selectedLoan.principal)} />
                 <DataRow title="Outstanding Balance" amount={rupees(selectedLoan.outstanding)} />
+                <DataRow title="Loan Tenure" amount={selectedSummary?.tenure || "-"} />
+                <DataRow title="Total Installments" amount={String(selectedSummary?.total ?? 0)} />
+                <DataRow title="Installment Amount" amount={selectedSummary?.installmentAmount ? rupees(selectedSummary.installmentAmount) : "-"} />
+                <DataRow title="Installment Frequency" amount={selectedLoan.interestCollectionFrequency || selectedLoan.repaymentFrequency || selectedLoan.type || "-"} />
+                <DataRow title="Paid Installments" amount={String(selectedSummary?.paid ?? 0)} />
+                <DataRow title="Pending Installments" amount={String(selectedSummary?.pending ?? 0)} />
+                <DataRow title="Remaining Amount" amount={rupees(selectedLoan.outstanding)} />
                 <DataRow title="Interest Scheme" amount={`${selectedLoan.interestRate}%`} />
                 <DataRow title="Collection Type" amount={selectedLoan.type || selectedLoan.collectionType || "-"} />
                 <DataRow title="Payment Method" amount={selectedLoan.paymentMethod || "-"} />
