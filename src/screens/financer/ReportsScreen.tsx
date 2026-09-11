@@ -228,33 +228,35 @@ export function ReportsScreen() {
 
 const styles = StyleSheet.create({
   exportBtn: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
     borderRadius: radii.pill,
     backgroundColor: colors.cyanSoft,
+    borderWidth: 1,
+    borderColor: "rgba(0, 156, 212, 0.15)",
     alignItems: 'center',
     justifyContent: 'center',
   },
   tab: {
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderRadius: radii.pill,
-    backgroundColor: colors.background,
+    backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.border,
   },
   tabActive: {
-    backgroundColor: colors.cyanSoft,
+    backgroundColor: colors.cyan,
     borderColor: colors.cyan,
   },
   tabText: {
     fontFamily: fonts.medium,
-    fontSize: 13,
+    fontSize: 12,
     color: colors.muted,
   },
   tabTextActive: {
-    fontFamily: fonts.bold,
-    color: colors.cyan,
+    fontFamily: fonts.semibold,
+    color: colors.white,
   },
   filterCard: {
     paddingTop: 10,
@@ -279,15 +281,15 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   recordCount: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.cyanSoft,
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: radii.md,
+    paddingVertical: 4,
+    borderRadius: radii.pill,
   },
   recordCountText: {
     fontFamily: fonts.semibold,
     fontSize: 11,
-    color: colors.muted,
+    color: colors.cyanDark,
   },
   skeletonCard: {
     height: 120,
@@ -295,14 +297,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   errorCard: {
-    backgroundColor: '#fef2f2',
-    borderColor: '#fecaca',
+    backgroundColor: colors.errorSoft,
+    borderColor: "rgba(229, 57, 53, 0.2)",
   },
   emptyIcon: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: colors.background,
+    backgroundColor: colors.cyanSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },

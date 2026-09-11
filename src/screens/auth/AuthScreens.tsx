@@ -27,7 +27,7 @@ const validPlace = (value: string) => {
 type PortalProps = NativeStackScreenProps<RootStackParamList, "PortalSelection">;
 export function PortalSelectionScreen({ navigation }: PortalProps) {
   return (
-    <LinearGradient colors={["#F8FAFC", "#E0F7FE", "#EDE9FE"]} style={styles.flex}>
+    <LinearGradient colors={["#EAF6FA", "#E0F7FA", "#CEF3FB"]} style={styles.flex}>
       <SafeAreaView style={styles.portalSafe}>
         <View style={[styles.petal, styles.petalTop]} />
         <View style={[styles.petal, styles.petalBottom]} />
@@ -142,7 +142,7 @@ export function FinancerOtpScreen({ navigation, route }: OtpProps) {
 
 type WelcomeProps = NativeStackScreenProps<RootStackParamList, "FinancerWelcome">;
 export function FinancerWelcomeScreen({ navigation }: WelcomeProps) {
-  return <LinearGradient colors={[colors.cyan, colors.purple]} style={styles.welcome}><View style={styles.logoDisc}><Logo size={54} showText={false} /></View><Text style={styles.welcomeTitle}>Welcome to INRFS! 🎉</Text><Text style={styles.welcomeSub}>Your account is ready. Start managing your loans.</Text><Button label="Continue to Dashboard" icon="arrow-forward" variant="secondary" onPress={() => navigation.replace("FinancerApp")} style={styles.welcomeButton} /></LinearGradient>;
+  return <LinearGradient colors={[colors.cyan, "#26C6DA"]} style={styles.welcome}><View style={styles.logoDisc}><Logo size={54} showText={false} /></View><Text style={styles.welcomeTitle}>Welcome to INRFS! 🎉</Text><Text style={styles.welcomeSub}>Your account is ready. Start managing your loans.</Text><Button label="Continue to Dashboard" icon="arrow-forward" variant="secondary" onPress={() => navigation.replace("FinancerApp")} style={styles.welcomeButton} /></LinearGradient>;
 }
 
 type AdminProps = NativeStackScreenProps<RootStackParamList, "AdminLogin">;
@@ -159,7 +159,7 @@ export function AdminLoginScreen({ navigation }: AdminProps) {
     finally { setSubmitting(false); }
   };
   const forgot = async () => { if (!validEmail(email)) return setError("Enter your registered email address first."); setSubmitting(true); setError(""); try { await api.post("/auth/password/forgot", { email: email.trim().toLowerCase() }, { auth: false }); setError("If this account exists, password reset instructions have been sent."); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Unable to request a password reset."); } finally { setSubmitting(false); } };
-  return <AuthShell><Logo size={50} /><View style={styles.adminBadge}><Ionicons name="shield-checkmark-outline" size={20} color={colors.purple} /><Text style={styles.adminBadgeText}>ADMIN PORTAL</Text></View><View style={styles.authHeading}><Text style={styles.authTitle}>INRFS Administration</Text><Text style={styles.authSub}>Secure access for platform administrators</Text></View><Field label="Email Address" placeholder="admin@inrfs.in" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={(v) => { setEmail(v.replace(/\s/g,"")); setError(""); }} maxLength={254}/><View><Field label="Password" placeholder="Enter password" secureTextEntry={!visible} value={password} onChangeText={(v) => { setPassword(v); setError(""); }} maxLength={128}/><Pressable onPress={() => setVisible(!visible)} style={styles.eye}><Ionicons name={visible ? "eye-off-outline" : "eye-outline"} size={20} color={colors.muted} /></Pressable></View>{error ? <Text style={styles.formError}>{error}</Text> : null}<View style={styles.rememberRow}><Pressable onPress={() => setRemember(!remember)} style={styles.checkRow}><Ionicons name={remember ? "checkbox" : "square-outline"} color={colors.purple} size={21} /><Text style={styles.rememberText}>Remember Me</Text></Pressable><Text style={[styles.link, { color: colors.purple }]} onPress={() => void forgot()}>Forgot Password?</Text></View><Button loading={submitting} label="Login" accent="purple" onPress={submit} /><Button label="Back to portal selection" icon="arrow-back" variant="ghost" onPress={() => navigation.navigate("PortalSelection")} /></AuthShell>;
+  return <AuthShell><Logo size={50} /><View style={styles.adminBadge}><Ionicons name="shield-checkmark-outline" size={20} color={colors.cyan} /><Text style={styles.adminBadgeText}>ADMIN PORTAL</Text></View><View style={styles.authHeading}><Text style={styles.authTitle}>INRFS Administration</Text><Text style={styles.authSub}>Secure access for platform administrators</Text></View><Field label="Email Address" placeholder="admin@inrfs.in" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={(v) => { setEmail(v.replace(/\s/g,"")); setError(""); }} maxLength={254}/><View><Field label="Password" placeholder="Enter password" secureTextEntry={!visible} value={password} onChangeText={(v) => { setPassword(v); setError(""); }} maxLength={128}/><Pressable onPress={() => setVisible(!visible)} style={styles.eye}><Ionicons name={visible ? "eye-off-outline" : "eye-outline"} size={20} color={colors.muted} /></Pressable></View>{error ? <Text style={styles.formError}>{error}</Text> : null}<View style={styles.rememberRow}><Pressable onPress={() => setRemember(!remember)} style={styles.checkRow}><Ionicons name={remember ? "checkbox" : "square-outline"} color={colors.cyan} size={21} /><Text style={styles.rememberText}>Remember Me</Text></Pressable><Text style={[styles.link, { color: colors.cyan }]} onPress={() => void forgot()}>Forgot Password?</Text></View><Button loading={submitting} label="Login" accent="cyan" onPress={submit} /><Button label="Back to portal selection" icon="arrow-back" variant="ghost" onPress={() => navigation.navigate("PortalSelection")} /></AuthShell>;
 }
 
 type ResetProps = NativeStackScreenProps<RootStackParamList, "ResetPassword">;
@@ -188,9 +188,37 @@ function AuthShell({ children }: { children: React.ReactNode; scroll?: boolean }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 }, portalSafe: { flex: 1, alignItems: "center", justifyContent: "center", padding: 22, overflow: "hidden" }, legalLinks: { flexDirection: "row", gap: 20, marginTop: 20 }, legalStatus: { color: colors.orange, fontFamily: fonts.medium, fontSize: 13, lineHeight: 20, marginBottom: 18 }, legalHeading: { color: colors.dark, fontFamily: fonts.bold, fontSize: 17, marginTop: 14, marginBottom: 6 }, legalBody: { color: colors.muted, fontFamily: fonts.regular, fontSize: 14, lineHeight: 22 },
-  petal: { position: "absolute", width: 270, height: 150, borderRadius: 100, backgroundColor: colors.purple, opacity: 0.035 },
-  petalTop: { right: -100, top: 80, transform: [{ rotate: "45deg" }] }, petalBottom: { left: -100, bottom: 40, transform: [{ rotate: "-30deg" }] },
+  petal: { position: "absolute", width: 300, height: 180, borderRadius: 120, backgroundColor: colors.cyan, opacity: 0.08 },
+  petalTop: { right: -100, top: 60, transform: [{ rotate: "45deg" }] }, petalBottom: { left: -100, bottom: 40, transform: [{ rotate: "-30deg" }] },
   portalTitle: { alignItems: "center", marginTop: 36, marginBottom: 34 }, title: { color: colors.dark, fontFamily: fonts.extrabold, fontSize: 25, textAlign: "center" }, subtitle: { color: colors.muted, fontFamily: fonts.regular, fontSize: 14, marginTop: 8 },
-  portalCards: { width: "100%", maxWidth: 430, flexDirection: "row", gap: 12 }, portalCard: { flex: 1, minHeight: 190, padding: 16, alignItems: "center", justifyContent: "center", backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.border, borderRadius: radii.xl, ...shadows.card }, portalCardTitle: { color: colors.dark, fontFamily: fonts.bold, fontSize: 14, marginTop: 17, textAlign: "center" }, portalCardSub: { color: colors.muted, fontFamily: fonts.regular, fontSize: 10, lineHeight: 15, textAlign: "center", marginTop: 7 }, copyright: { color: colors.subtle, fontFamily: fonts.regular, fontSize: 10, marginTop: 30 },
-  authSafe: { flex: 1, justifyContent: "center", padding: 20, backgroundColor: colors.background }, authScroll: { flexGrow: 1, justifyContent: "center", paddingVertical: 26 }, authCard: { width: "100%", maxWidth: 480, alignSelf: "center", padding: 25, gap: 17, borderRadius: radii.xxl }, authHeading: { alignItems: "center", gap: 5 }, authTitle: { color: colors.dark, fontFamily: fonts.bold, fontSize: 21, textAlign: "center" }, authSub: { color: colors.muted, fontFamily: fonts.regular, fontSize: 13, lineHeight: 19, textAlign: "center" }, authLinkText: { color: colors.muted, fontFamily: fonts.regular, fontSize: 13, textAlign: "center" }, link: { color: colors.cyan, fontFamily: fonts.semibold, fontSize: 13 }, forgotLink: { color: colors.cyan, fontFamily: fonts.semibold, fontSize: 12, textAlign: "right", marginTop: -8 }, fullButton: { width: "100%" }, formError: { color: colors.error, fontFamily: fonts.regular, fontSize: 12, textAlign: "center" }, mobileText: { color: colors.cyan, fontFamily: fonts.semibold, fontSize: 13, marginTop: 3 }, twoButtons: { flexDirection: "row", gap: 10 }, demo: { color: colors.subtle, fontFamily: fonts.regular, fontSize: 10, textAlign: "center" }, adminBadge: { alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.purpleSoft, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radii.pill }, adminBadgeText: { color: colors.purple, fontFamily: fonts.bold, fontSize: 10, letterSpacing: 1 }, eye: { position: "absolute", right: 12, bottom: 13 }, rememberRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, checkRow: { flexDirection: "row", alignItems: "center", gap: 6 }, rememberText: { color: colors.muted, fontFamily: fonts.regular, fontSize: 12 }, welcome: { flex: 1, alignItems: "center", justifyContent: "center", padding: 25 }, logoDisc: { backgroundColor: colors.white, padding: 14, borderRadius: 50, marginBottom: 24 }, welcomeTitle: { color: colors.white, fontFamily: fonts.extrabold, fontSize: 28, textAlign: "center" }, welcomeSub: { color: "rgba(255,255,255,0.88)", fontFamily: fonts.regular, fontSize: 15, textAlign: "center", lineHeight: 22, marginTop: 10, marginBottom: 34 }, welcomeButton: { paddingHorizontal: 26 },
+  portalCards: { width: "100%", maxWidth: 430, flexDirection: "row", gap: 12 },
+  portalCard: { flex: 1, minHeight: 190, padding: 16, alignItems: "center", justifyContent: "center", backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.border, borderRadius: radii.xl, ...shadows.card },
+  portalCardTitle: { color: colors.dark, fontFamily: fonts.bold, fontSize: 14, marginTop: 17, textAlign: "center" },
+  portalCardSub: { color: colors.muted, fontFamily: fonts.regular, fontSize: 10, lineHeight: 15, textAlign: "center", marginTop: 7 },
+  copyright: { color: colors.subtle, fontFamily: fonts.regular, fontSize: 10, marginTop: 30 },
+  authSafe: { flex: 1, justifyContent: "center", padding: 20, backgroundColor: colors.background },
+  authScroll: { flexGrow: 1, justifyContent: "center", paddingVertical: 26 },
+  authCard: { width: "100%", maxWidth: 480, alignSelf: "center", padding: 25, gap: 17, borderRadius: radii.xxl },
+  authHeading: { alignItems: "center", gap: 5 },
+  authTitle: { color: colors.dark, fontFamily: fonts.bold, fontSize: 21, textAlign: "center" },
+  authSub: { color: colors.muted, fontFamily: fonts.regular, fontSize: 13, lineHeight: 19, textAlign: "center" },
+  authLinkText: { color: colors.muted, fontFamily: fonts.regular, fontSize: 13, textAlign: "center" },
+  link: { color: colors.cyan, fontFamily: fonts.semibold, fontSize: 13 },
+  forgotLink: { color: colors.cyan, fontFamily: fonts.semibold, fontSize: 12, textAlign: "right", marginTop: -8 },
+  fullButton: { width: "100%" },
+  formError: { color: colors.error, fontFamily: fonts.regular, fontSize: 12, textAlign: "center" },
+  mobileText: { color: colors.cyan, fontFamily: fonts.semibold, fontSize: 13, marginTop: 3 },
+  twoButtons: { flexDirection: "row", gap: 10 },
+  demo: { color: colors.subtle, fontFamily: fonts.regular, fontSize: 10, textAlign: "center" },
+  adminBadge: { alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.cyanSoft, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radii.pill, borderWidth: 1, borderColor: "rgba(0, 156, 212, 0.2)" },
+  adminBadgeText: { color: colors.cyan, fontFamily: fonts.bold, fontSize: 10, letterSpacing: 1 },
+  eye: { position: "absolute", right: 12, bottom: 13 },
+  rememberRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  checkRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  rememberText: { color: colors.muted, fontFamily: fonts.regular, fontSize: 12 },
+  welcome: { flex: 1, alignItems: "center", justifyContent: "center", padding: 25 },
+  logoDisc: { backgroundColor: colors.white, padding: 14, borderRadius: 50, marginBottom: 24, ...shadows.glow },
+  welcomeTitle: { color: colors.white, fontFamily: fonts.extrabold, fontSize: 28, textAlign: "center" },
+  welcomeSub: { color: "rgba(255,255,255,0.92)", fontFamily: fonts.regular, fontSize: 15, textAlign: "center", lineHeight: 22, marginTop: 10, marginBottom: 34 },
+  welcomeButton: { paddingHorizontal: 26 },
 });

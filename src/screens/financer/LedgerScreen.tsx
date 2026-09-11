@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: radii.pill,
-    backgroundColor: '#e0f2fe',
+    backgroundColor: colors.cyanSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },

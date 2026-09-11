@@ -6,7 +6,7 @@ import { Button, Card, Field, Header, Segmented, ToggleRow, Screen } from "../..
 import { useAuth } from "../../auth/AuthContext";
 import { platformApi } from "../../services/platformApi";
 import { Ionicons } from "../../components/AppIcon";
-import { colors, fonts, radii, spacing } from "../../theme/tokens";
+import { colors, fonts, radii, shadows, spacing } from "../../theme/tokens";
 
 const msg = (e: unknown) => e instanceof Error ? e.message : "Please try again.";
 
@@ -369,12 +369,10 @@ const s = StyleSheet.create({
     height: 72,
     borderRadius: 36,
     overflow: 'hidden',
-    backgroundColor: '#0aaee8',
-    elevation: 2,
-    shadowColor: '#173B62',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    backgroundColor: colors.cyan,
+    borderWidth: 2,
+    borderColor: "rgba(0, 156, 212, 0.2)",
+    ...shadows.card,
   },
   avatarImage: {
     width: '100%',
@@ -384,11 +382,12 @@ const s = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.cyanSoft,
   },
   avatarText: {
     fontFamily: fonts.bold,
     fontSize: 28,
-    color: colors.white,
+    color: colors.cyan,
   },
   profileIdentity: {
     flex: 1,
@@ -415,27 +414,29 @@ const s = StyleSheet.create({
     marginTop: 8,
   },
   creditBox: {
-    backgroundColor: '#dff6fc',
-    borderColor: '#bcebf7',
+    backgroundColor: colors.cyanSoft,
+    borderColor: "rgba(0, 156, 212, 0.2)",
+    borderWidth: 1,
+    borderRadius: radii.xl,
     alignItems: 'flex-start',
     padding: 24,
   },
   creditLabel: {
     fontFamily: fonts.semibold,
     fontSize: 14,
-    color: '#0788c2',
+    color: colors.cyanDark,
     marginBottom: 4,
   },
   creditNumber: {
     fontFamily: fonts.extrabold,
     fontSize: 32,
-    color: '#0874b7',
+    color: colors.cyanDark,
     marginBottom: 6,
   },
   creditPlan: {
     fontFamily: fonts.medium,
     fontSize: 14,
-    color: '#0874b7',
+    color: colors.cyanDark,
   },
   securityDesc: {
     fontFamily: fonts.regular,
@@ -448,13 +449,15 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#d9fbe5',
+    backgroundColor: colors.greenSoft,
     padding: 16,
-    borderRadius: radii.md,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: "rgba(67, 160, 71, 0.2)",
   },
   securityStatusText: {
     fontFamily: fonts.bold,
     fontSize: 16,
-    color: '#08743b',
+    color: colors.green,
   }
 });

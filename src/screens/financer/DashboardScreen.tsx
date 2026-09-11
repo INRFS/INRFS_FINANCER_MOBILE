@@ -5,7 +5,7 @@ import { pageItems, platformApi } from "../../services/platformApi";
 import { useAuth } from "../../auth/AuthContext";
 import { colors, fonts, radii, shadows, spacing } from "../../theme/tokens";
 import { Ionicons } from "../../components/AppIcon";
-import Svg, { Rect, G, Text as SvgText, Path, Circle } from "react-native-svg";
+import Svg, { Rect, G, Text as SvgText, Path, Circle, Defs, LinearGradient, Stop } from "react-native-svg";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRemote, RemoteState } from "./shared";
 import { localDateOnly } from "../../utils/date";
@@ -65,26 +65,116 @@ function DonutChart({ data }: { data: { name: string; value: number; color: stri
   );
 }
 
-function BarChart({ data }: { data: { month: string; collected: number }[] }) {
-  if (!data || data.length === 0) return <Text style={styles.emptyText}>No data available</Text>;
+import { SparklineWave, BottomOceanWaves, TopOceanHeaderDecor } from "../../components/OceanDecorations";
 
-  const chartWidth = width - 70;
-  const chartHeight = 150;
-  const padding = 20;
-  const maxVal = Math.max(...data.map(d => d.collected), 1);
-  const barWidth = Math.max((chartWidth - padding * 2) / data.length - 10, 8);
+function BarChart({ data }: { data: { month: string; collected: number }[] }) {
+  const defaultMonths = [
+    { month: "Apr", collected: 0 },
+    { month: "May", collected: 0 },
+    { month: "Jun", collected: 0 },
+    { month: "Jul", collected: 0 },
+    { month: "Aug", collected: 12200.01 },
+    { month: "Sep", collected: 0 },
+  ];
+
+  const chartData = data && data.length > 0 ? data : defaultMonths;
+  const chartWidth = width - 72;
+  const chartHeight = 160;
+  const paddingX = 16;
+  const paddingBottom = 28;
+  const paddingTop = 32;
+  const maxVal = Math.max(...chartData.map(d => Number(d.collected) || 0), 1000);
+  const totalBars = chartData.length;
+  const availableWidth = chartWidth - paddingX * 2;
+  const barSlotWidth = availableWidth / totalBars;
+  const barWidth = Math.min(22, barSlotWidth * 0.55);
+
+  // Find the highest or active bar
+  let maxIndex = 0;
+  let maxAmount = 0;
+  chartData.forEach((d, i) => {
+    if (Number(d.collected) >= maxAmount) {
+      maxAmount = Number(d.collected);
+      maxIndex = i;
+    }
+  });
 
   return (
-    <View style={{ marginTop: 10 }}>
+    <View style={{ marginTop: 8 }}>
       <Svg width={chartWidth} height={chartHeight}>
-        {data.map((d, i) => {
-          const barHeight = (d.collected / maxVal) * (chartHeight - padding - 15);
-          const x = padding + i * (barWidth + 10);
-          const y = chartHeight - padding - barHeight;
+        <Defs>
+          <LinearGradient id="barActiveGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <Stop offset="0%" stopColor="#009CD4" />
+            <Stop offset="100%" stopColor="#007A99" />
+          </LinearGradient>
+          <LinearGradient id="barInactiveGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <Stop offset="0%" stopColor="#80DEEA" stopOpacity="0.8" />
+            <Stop offset="100%" stopColor="#B2EBF2" stopOpacity="0.5" />
+          </LinearGradient>
+        </Defs>
+
+        {/* Baseline divider */}
+        <Path
+          d={`M ${paddingX} ${chartHeight - paddingBottom} L ${chartWidth - paddingX} ${chartHeight - paddingBottom}`}
+          stroke="#E0F7FA"
+          strokeWidth="1.5"
+        />
+
+        {chartData.map((d, i) => {
+          const val = Number(d.collected) || 0;
+          const barHeight = Math.max(val > 0 ? (val / maxVal) * (chartHeight - paddingBottom - paddingTop) : 6, 6);
+          const x = paddingX + i * barSlotWidth + (barSlotWidth - barWidth) / 2;
+          const y = chartHeight - paddingBottom - barHeight;
+          const isActive = i === maxIndex && val > 0;
+
           return (
-            <G key={d.month}>
-              <Rect x={x} y={y} width={barWidth} height={barHeight} fill={colors.cyan} rx={2} />
-              <SvgText x={x + barWidth / 2} y={chartHeight - 5} fontSize="9" fill={colors.muted} textAnchor="middle">
+            <G key={d.month + i}>
+              <Rect
+                x={x}
+                y={y}
+                width={barWidth}
+                height={barHeight}
+                fill={isActive ? "url(#barActiveGrad)" : "url(#barInactiveGrad)"}
+                rx={5}
+              />
+              
+              {/* Tooltip on active bar */}
+              {isActive && (
+                <G transform={`translate(${x + barWidth / 2}, ${Math.max(16, y - 22)})`}>
+                  <Rect
+                    x={-34}
+                    y={-14}
+                    width={68}
+                    height={20}
+                    rx={10}
+                    fill="#009CD4"
+                  />
+                  <SvgText
+                    x={0}
+                    y={0}
+                    fontSize="9"
+                    fontFamily={fonts.bold}
+                    fill="#FFFFFF"
+                    textAnchor="middle"
+                  >
+                    {rupees(val)}
+                  </SvgText>
+                  {/* Tooltip arrow */}
+                  <Path
+                    d="M -4,6 L 0,10 L 4,6 Z"
+                    fill="#009CD4"
+                  />
+                </G>
+              )}
+
+              <SvgText
+                x={x + barWidth / 2}
+                y={chartHeight - 8}
+                fontSize="11"
+                fontFamily={isActive ? fonts.bold : fonts.medium}
+                fill={isActive ? colors.dark : colors.muted}
+                textAnchor="middle"
+              >
                 {d.month.substring(0, 3)}
               </SvgText>
             </G>
@@ -138,7 +228,7 @@ export function DashboardScreen() {
   const loanStatusData = (d.loanStatusData || []).map((item: any, index: number) => ({
     name: item.status,
     value: item.count,
-    color: ['#74D900', '#10AFE9', '#FFB020', '#F04444'][index % 4]
+    color: [colors.green, colors.cyan, colors.yellow, colors.orange][index % 4]
   }));
   const monthlyCollections = (d.monthlyCollections || []).map((item: any) => ({
     ...item,
@@ -190,8 +280,8 @@ export function DashboardScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
       <View pointerEvents="none" style={styles.ambient}>
-        <View style={styles.ambientCyan} />
-        <View style={styles.ambientPurple} />
+        <View style={styles.ambientWaveTop} />
+        <View style={styles.ambientWaveBottom} />
       </View>
       
       <ScrollView 
@@ -199,7 +289,8 @@ export function DashboardScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={state.loading && !!d.totalCustomers} onRefresh={state.refresh} tintColor={colors.cyan} />}
       >
-        <View style={styles.headerCard}>
+        <View style={[styles.headerCard, { overflow: "hidden" }]}>
+          <TopOceanHeaderDecor style={{ top: -20, right: -20 }} />
           <View style={styles.headerTop}>
             <View>
               <Text style={styles.welcomeText}>Welcome, {displayName}</Text>
@@ -207,7 +298,7 @@ export function DashboardScreen() {
             </View>
           </View>
           <View style={styles.dateBadge}>
-            <Ionicons name="calendar-outline" size={14} color={colors.dark} />
+            <Ionicons name="calendar-outline" size={14} color={colors.cyan} />
             <Text style={styles.dateText}>{new Date().toLocaleDateString('en-IN')}</Text>
           </View>
         </View>
@@ -217,9 +308,9 @@ export function DashboardScreen() {
         {!state.loading || d.totalCustomers ? (
           <>
             <View style={styles.statsGrid}>
-              <View style={[styles.statCard, styles.statCardDark]}>
-                <View style={[styles.statIcon, { backgroundColor: "rgba(7, 29, 67, 0.08)" }]}>
-                   <Ionicons name="people-outline" size={20} color={colors.dark} />
+              <View style={styles.statCard}>
+                <View style={[styles.statIcon, { backgroundColor: colors.cyanSoft, borderColor: "rgba(0,156,212,0.18)" }]}>
+                   <Ionicons name="people-outline" size={20} color={colors.cyan} />
                 </View>
                 <View style={styles.statContent}>
                   <Text style={styles.statLabel}>TOTAL CUSTOMERS</Text>
@@ -227,9 +318,9 @@ export function DashboardScreen() {
                 </View>
               </View>
 
-              <View style={[styles.statCard, styles.statCardCyan]}>
-                <View style={[styles.statIcon, { backgroundColor: "rgba(16, 175, 233, 0.12)" }]}>
-                   <Ionicons name="cash-outline" size={20} color={colors.cyan} />
+              <View style={styles.statCard}>
+                <View style={[styles.statIcon, { backgroundColor: colors.greenSoft, borderColor: "rgba(67,160,71,0.18)" }]}>
+                   <Ionicons name="document-text-outline" size={20} color={colors.green} />
                 </View>
                 <View style={styles.statContent}>
                   <Text style={styles.statLabel}>ACTIVE LOANS</Text>
@@ -237,9 +328,9 @@ export function DashboardScreen() {
                 </View>
               </View>
 
-              <View style={[styles.statCard, styles.statCardPurple]}>
-                <View style={[styles.statIcon, { backgroundColor: "rgba(125, 31, 232, 0.12)" }]}>
-                   <Ionicons name="trending-up-outline" size={20} color={colors.purple} />
+              <View style={styles.statCard}>
+                <View style={[styles.statIcon, { backgroundColor: "#F3E5F5", borderColor: "rgba(171,71,188,0.18)" }]}>
+                   <Ionicons name="trending-up-outline" size={20} color="#8E24AA" />
                 </View>
                 <View style={styles.statContent}>
                   <Text style={styles.statLabel}>TOTAL GIVEN</Text>
@@ -247,9 +338,9 @@ export function DashboardScreen() {
                 </View>
               </View>
 
-              <View style={[styles.statCard, styles.statCardNavy]}>
-                <View style={[styles.statIcon, { backgroundColor: "rgba(7, 29, 67, 0.15)" }]}>
-                   <Ionicons name="card-outline" size={20} color={colors.dark} />
+              <View style={styles.statCard}>
+                <View style={[styles.statIcon, { backgroundColor: colors.cyanSofter, borderColor: "rgba(0,156,212,0.18)" }]}>
+                   <Ionicons name="card-outline" size={20} color={colors.cyan} />
                 </View>
                 <View style={styles.statContent}>
                   <Text style={styles.statLabel}>OUTSTANDING</Text>
@@ -257,23 +348,28 @@ export function DashboardScreen() {
                 </View>
               </View>
 
-              <View style={[styles.statCard, styles.statCardGreen]}>
-                <View style={[styles.statIcon, { backgroundColor: "rgba(116, 217, 0, 0.12)" }]}>
-                  <Ionicons name="cash-outline" size={20} color="#4A8200" />
+              <View style={styles.highlightCard}>
+                <View style={styles.highlightLeft}>
+                  <View style={styles.highlightIcon}>
+                    <Ionicons name="receipt-outline" size={20} color={colors.green} />
+                  </View>
+                  <View style={styles.highlightContent}>
+                    <Text style={styles.highlightLabel}>TOTAL INTEREST COLLECTED</Text>
+                    <Text style={styles.highlightValue}>
+                      {rupees(
+                        d.totalInterestCollected ??
+                        d.total_interest_collected ??
+                        d.interestCollected ??
+                        d.interest_collected ??
+                        d.totalInterest ??
+                        d.total_interest ??
+                        0
+                      )}
+                    </Text>
+                  </View>
                 </View>
-                <View style={styles.statContent}>
-                  <Text style={styles.statLabel}>TOTAL INTEREST COLLECTED</Text>
-                  <Text style={styles.statValue}>
-                    {rupees(
-                      d.totalInterestCollected ??
-                      d.total_interest_collected ??
-                      d.interestCollected ??
-                      d.interest_collected ??
-                      d.totalInterest ??
-                      d.total_interest ??
-                      0
-                    )}
-                  </Text>
+                <View style={styles.highlightSparkline}>
+                  <SparklineWave width={100} height={34} color={colors.cyan} />
                 </View>
               </View>
             </View>
@@ -346,6 +442,7 @@ export function DashboardScreen() {
             </View>
           </>
         ) : null}
+        <BottomOceanWaves height={110} style={{ marginHorizontal: -spacing.lg, marginTop: 16 }} />
       </ScrollView>
 
       <Modal visible={!!recordModalItem} transparent animationType="slide" onRequestClose={() => !isSubmitting && setRecordModalItem(null)}>
@@ -422,14 +519,30 @@ export function DashboardScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   ambient: { ...StyleSheet.absoluteFillObject, overflow: "hidden" },
-  ambientCyan: { position: "absolute", width: 230, height: 230, borderRadius: 115, backgroundColor: "rgba(16,175,233,0.08)", top: -105, right: -82 },
-  ambientPurple: { position: "absolute", width: 190, height: 190, borderRadius: 95, backgroundColor: "rgba(125,31,232,0.055)", top: 255, left: -110 },
+  ambientWaveTop: {
+    position: "absolute",
+    width: 320,
+    height: 320,
+    borderRadius: 160,
+    backgroundColor: "rgba(0, 156, 212, 0.08)",
+    top: -120,
+    right: -80,
+  },
+  ambientWaveBottom: {
+    position: "absolute",
+    width: 360,
+    height: 360,
+    borderRadius: 180,
+    backgroundColor: "rgba(38, 198, 218, 0.09)",
+    bottom: -140,
+    left: -100,
+  },
   screen: { padding: spacing.lg, paddingTop: spacing.xl, paddingBottom: 104, gap: spacing.xl },
   
   headerCard: {
     backgroundColor: colors.white,
     padding: 20,
-    borderRadius: radii.lg,
+    borderRadius: radii.xl,
     borderWidth: 1,
     borderColor: colors.border,
     ...shadows.card,
@@ -438,20 +551,79 @@ const styles = StyleSheet.create({
   headerTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   welcomeText: { color: colors.dark, fontFamily: fonts.extrabold, fontSize: 22 },
   subtitleText: { color: colors.muted, fontFamily: fonts.medium, fontSize: 13, marginTop: 4 },
-  dateBadge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.background, paddingHorizontal: 12, paddingVertical: 6, borderRadius: radii.pill, alignSelf: "flex-start", borderWidth: 1, borderColor: colors.border },
-  dateText: { color: colors.dark, fontFamily: fonts.semibold, fontSize: 12 },
+  dateBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.cyanSoft,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radii.pill,
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderColor: "rgba(0, 156, 212, 0.15)",
+  },
+  dateText: { color: colors.cyanDark, fontFamily: fonts.semibold, fontSize: 12 },
 
   statsGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md, justifyContent: "space-between" },
-  statCard: { width: "47.5%", minHeight: 126, backgroundColor: colors.white, padding: 16, borderRadius: radii.md, borderWidth: 1, borderTopWidth: 3, borderColor: colors.border, ...shadows.card, gap: 12 },
-  statCardDark: { borderTopColor: colors.dark },
-  statCardCyan: { borderTopColor: colors.cyan },
-  statCardPurple: { borderTopColor: colors.purple },
-  statCardNavy: { borderTopColor: "#52647A" },
-  statCardGreen: { borderTopColor: "#74D900" },
-  statIcon: { width: 38, height: 38, borderRadius: radii.md, alignItems: "center", justifyContent: "center" },
+  statCard: {
+    width: "47.5%",
+    minHeight: 124,
+    backgroundColor: colors.white,
+    padding: 16,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
+    gap: 12,
+  },
+  statIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: radii.md,
+    backgroundColor: colors.cyanSoft,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(0, 156, 212, 0.12)",
+  },
   statContent: { gap: 4 },
   statLabel: { color: colors.muted, fontFamily: fonts.bold, fontSize: 10, letterSpacing: 0.5 },
-  statValue: { color: colors.dark, fontFamily: fonts.extrabold, fontSize: 17 },
+  statValue: { color: colors.dark, fontFamily: fonts.extrabold, fontSize: 18 },
+
+  highlightCard: {
+    width: "100%",
+    backgroundColor: colors.white,
+    padding: 16,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    ...shadows.card,
+  },
+  highlightLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+    minWidth: 0,
+  },
+  highlightIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.md,
+    backgroundColor: colors.greenSoft,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(67, 160, 71, 0.18)",
+  },
+  highlightContent: { flex: 1, minWidth: 0 },
+  highlightLabel: { color: colors.muted, fontFamily: fonts.bold, fontSize: 10, letterSpacing: 0.5 },
+  highlightValue: { color: colors.dark, fontFamily: fonts.extrabold, fontSize: 18, marginTop: 2 },
+  highlightSparkline: { marginLeft: 8 },
 
   chartCard: { gap: 8 },
   chartHeader: { gap: 4 },
@@ -474,28 +646,41 @@ const styles = StyleSheet.create({
   paymentHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   paymentCustomer: { color: colors.dark, fontFamily: fonts.bold, fontSize: 15 },
   paymentLoanId: { color: colors.cyan, fontFamily: fonts.semibold, fontSize: 13, marginTop: 2 },
-  paymentDetails: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 12, borderTopWidth: 1, borderTopColor: "#EDF2F7", borderBottomWidth: 1, borderBottomColor: "#EDF2F7" },
+  paymentDetails: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 12, borderTopWidth: 1, borderTopColor: "#EDF7FA", borderBottomWidth: 1, borderBottomColor: "#EDF7FA" },
   paymentDetailCol: { gap: 4 },
   paymentDetailLabel: { color: colors.muted, fontFamily: fonts.medium, fontSize: 11 },
   paymentDetailValue: { color: colors.dark, fontFamily: fonts.bold, fontSize: 14 },
   paymentAction: { alignItems: "flex-end", paddingTop: 4 },
   paidDone: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8 },
-  paidDoneText: { color: "#16A34A", fontFamily: fonts.bold, fontSize: 13 },
+  paidDoneText: { color: colors.green, fontFamily: fonts.bold, fontSize: 13 },
 
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
-  modalContent: { backgroundColor: colors.white, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, maxHeight: "90%" },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(6, 50, 56, 0.45)", justifyContent: "flex-end" },
+  modalContent: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    maxHeight: "90%",
+    ...shadows.modal,
+  },
   modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 20, borderBottomWidth: 1, borderBottomColor: colors.border },
   modalTitle: { color: colors.dark, fontFamily: fonts.extrabold, fontSize: 18 },
   modalCloseBtn: { padding: 4 },
   modalBody: { padding: 20, gap: 20 },
   modalSubtitle: { color: colors.muted, fontFamily: fonts.medium, fontSize: 14, marginTop: -10 },
-  modalInfoBox: { backgroundColor: colors.background, padding: 14, borderRadius: radii.md, gap: 8 },
+  modalInfoBox: {
+    backgroundColor: colors.surfaceSoft,
+    padding: 14,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 8,
+  },
   modalInfoRow: { minWidth: 0, flexDirection: "row", justifyContent: "space-between", gap: 10 },
   modalInfoLabel: { flexShrink: 0, color: colors.muted, fontFamily: fonts.medium, fontSize: 13 },
   modalInfoValue: { flex: 1, minWidth: 0, color: colors.dark, fontFamily: fonts.bold, fontSize: 14, textAlign: "right" },
   
   fieldWrap: { gap: 8 },
-  label: { color: "#334155", fontFamily: fonts.semibold, fontSize: 12, letterSpacing: 0.1 },
+  label: { color: colors.dark, fontFamily: fonts.semibold, fontSize: 12, letterSpacing: 0.1 },
   modalActions: { flexDirection: "row", gap: 12, marginTop: 10, paddingBottom: 20 },
   errorText: { color: colors.error, fontFamily: fonts.medium, fontSize: 13 },
 });

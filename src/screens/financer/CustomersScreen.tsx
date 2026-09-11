@@ -12,6 +12,7 @@ import { localDateOnly } from "../../utils/date";
 import { formatInr } from "../../utils/format";
 import { collectionInterestForFrequency, totalInterestForDuration } from "./loanInterest";
 import { resolveAddressByPin, suggestAddresses, type AddressMatch } from "../../utils/addressLookup";
+import { BottomOceanWaves } from "../../components/OceanDecorations";
 
 const todayISO = () => localDateOnly();
 
@@ -232,6 +233,7 @@ export function CustomersScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 80, gap: 14 }}
+        ListFooterComponent={<BottomOceanWaves height={100} style={{ marginTop: 14 }} />}
         ListHeaderComponent={
           <View style={{ gap: spacing.xl }}>
             <Header
@@ -377,6 +379,7 @@ function CustomerDetailsModal({ customer, products, initialEdit = false, close, 
             {tab === "Ledger" && <LedgerTab customer={detailsCustomer} />}
             {tab === "Documents" && <CustomerDocuments customer={detailsCustomer} />}
           </View>
+          <BottomOceanWaves height={100} style={{ marginTop: 24 }} />
         </ScrollView>
       </View>
 
@@ -1101,21 +1104,49 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
 }
 
 const localStyles = StyleSheet.create({
-  searchWrap: { flexDirection: "row", alignItems: "center", backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, paddingHorizontal: 12, height: 44 },
+  searchWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.surfaceSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.xl,
+    paddingHorizontal: 14,
+    height: 48,
+  },
   searchIcon: { marginRight: 8 },
   searchInput: { flex: 1, height: "100%", fontFamily: fonts.regular, fontSize: 14, color: colors.dark },
-  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.cyanSoft, alignItems: "center", justifyContent: "center" },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.cyanSoft,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(0, 156, 212, 0.15)",
+  },
   avatarText: { color: colors.cyan, fontFamily: fonts.bold, fontSize: 18 },
   metricLabel: { color: colors.muted, fontFamily: fonts.medium, fontSize: 12, marginBottom: 4 },
   metricValue: { color: colors.dark, fontFamily: fonts.bold, fontSize: 14 },
   dateLabel: { color: colors.dark, fontFamily: fonts.semibold, fontSize: 13 },
-  datePickerField: { minHeight: 54, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, backgroundColor: colors.white, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  suggestions: { borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, overflow: "hidden" },
+  datePickerField: {
+    minHeight: 52,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    backgroundColor: colors.surfaceSoft,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  suggestions: { borderWidth: 1, borderColor: colors.border, borderRadius: radii.lg, overflow: "hidden" },
   suggestion: { paddingHorizontal: 14, paddingVertical: 12, backgroundColor: colors.white, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   suggestionText: { color: colors.dark, fontFamily: fonts.medium, fontSize: 13 },
-  previewOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.75)", justifyContent: "center", padding: 20 },
-  previewCard: { height: "90%", maxHeight: 640, padding: 16, gap: 14, borderRadius: radii.lg, backgroundColor: colors.white },
+  previewOverlay: { flex: 1, backgroundColor: "rgba(6, 50, 56, 0.7)", justifyContent: "center", padding: 20 },
+  previewCard: { height: "90%", maxHeight: 640, padding: 18, gap: 14, borderRadius: radii.xl, backgroundColor: colors.white },
   previewTitle: { color: colors.dark, fontFamily: fonts.bold, fontSize: 15 },
-  previewImage: { width: "100%", flex: 1, minHeight: 160, backgroundColor: colors.background, borderRadius: radii.md },
+  previewImage: { width: "100%", flex: 1, minHeight: 160, backgroundColor: colors.surfaceSoft, borderRadius: radii.lg },
   datePickerText: { color: colors.dark, fontFamily: fonts.regular, fontSize: 14 }
 });

@@ -6,6 +6,7 @@ import { RemoteState, useRemote } from "./shared";
 import { s } from "./styles";
 import { localDateOnly } from "../../utils/date";
 import { formatInr } from "../../utils/format";
+import { BottomOceanWaves } from "../../components/OceanDecorations";
 
 const rupees = formatInr;
 const dateOnly = () => localDateOnly();
@@ -78,6 +79,7 @@ export function DuesScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: 120, gap: 14, flexGrow: 1 }}
+        ListFooterComponent={<BottomOceanWaves height={100} style={{ marginTop: 14 }} />}
         ListHeaderComponent={
           <View style={s.gap}>
             <Header title="Payments & Dues" subtitle="Manage schedules and record payments" action={<Button label="Refresh" variant="ghost" onPress={() => void state.refresh()}/>}/>

@@ -240,17 +240,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 14,
     backgroundColor: colors.white,
+    borderColor: colors.border,
+    borderWidth: 1,
     borderRadius: radii.xl,
     padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
     ...shadows.card,
   },
   cardUnread: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.surfaceSoft,
     borderLeftWidth: 4,
     borderLeftColor: colors.cyan,
-    paddingLeft: 13, // Adjust for the 4px border to keep alignment
+    paddingLeft: 13,
   },
   iconWrapper: {
     width: 44,

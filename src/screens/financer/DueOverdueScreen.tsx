@@ -7,6 +7,7 @@ import { RemoteState, useRemote } from "./shared";
 import { s } from "./styles";
 import { Ionicons } from "../../components/AppIcon";
 import { colors, fonts, radii, spacing } from "../../theme/tokens";
+import { BottomOceanWaves } from "../../components/OceanDecorations";
 
 const MONTHS: Record<string, number> = {
   Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
@@ -241,6 +242,7 @@ export function DueOverdueScreen() {
         data={filteredItems}
         keyExtractor={(item, idx) => item.id || `${item.loanId}-${idx}`}
         contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: 120, gap: 14, flexGrow: 1 }}
+        ListFooterComponent={<BottomOceanWaves height={100} style={{ marginTop: 14 }} />}
         ListHeaderComponent={listHeader}
         ListEmptyComponent={
           !state.loading ? (
@@ -345,10 +347,10 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   listHeader: { paddingTop: spacing.xl, paddingBottom: spacing.md, gap: spacing.xl },
   alertBanner: {
-    backgroundColor: '#fef2f2',
+    backgroundColor: colors.errorSoft,
     borderWidth: 1,
-    borderColor: '#fecaca',
-    borderRadius: radii.lg,
+    borderColor: "rgba(229, 57, 53, 0.2)",
+    borderRadius: radii.xl,
     padding: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
@@ -357,12 +359,12 @@ const styles = StyleSheet.create({
   alertTitle: {
     fontFamily: fonts.bold,
     fontSize: 13,
-    color: '#991b1b',
+    color: colors.error,
   },
   alertSubtitle: {
     fontFamily: fonts.medium,
     fontSize: 11,
-    color: '#b91c1c',
+    color: "#B71C1C",
     marginTop: 2,
   },
   sectionTitle: {
@@ -379,7 +381,7 @@ const styles = StyleSheet.create({
     right: 12,
     top: 24,
     padding: 4,
-    backgroundColor: colors.background,
+    backgroundColor: colors.cyanSoft,
     borderRadius: radii.pill,
   },
   avatar: {
@@ -387,6 +389,8 @@ const styles = StyleSheet.create({
     height: 38,
     borderRadius: 19,
     backgroundColor: colors.cyanSoft,
+    borderWidth: 1,
+    borderColor: "rgba(0, 156, 212, 0.15)",
     alignItems: 'center',
     justifyContent: 'center',
   },
