@@ -58,11 +58,13 @@ The downloaded Figma Make source archive is retained in the repository root as t
 
 ## API configuration
 
-The app reuses the INRFS `/api/v1` backend used by the web application. Set
-`EXPO_PUBLIC_API_BASE_URL` before starting Expo. Copy `.env.example` to `.env`
-and replace the host with the development machine's LAN address when testing on
-a physical phone. Android emulators default to `http://10.0.2.2:5187/api/v1`;
-iOS simulators default to `http://localhost:5187/api/v1`.
+The app defaults to the same production API as the web application:
+`https://financer.inrfs.com/api/api/v1`. Copy `.env.example` to `.env` to use it.
+For a local backend, override `EXPO_PUBLIC_API_BASE_URL` with the development
+machine's LAN address for a physical phone, `http://10.0.2.2:5187/api/v1` for an
+Android emulator, or `http://localhost:5187/api/v1` for an iOS simulator.
+The API address is bundled into release builds, so rebuild and reinstall the APK
+after changing it.
 
 Authentication tokens are persisted with `expo-secure-store`. The access token
 is attached as a bearer token; the refresh token is sent to `/auth/refresh` in
