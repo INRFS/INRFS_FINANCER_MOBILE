@@ -305,7 +305,7 @@ const styles = StyleSheet.create({
   },
   currentCard: {
     borderTopWidth: 4,
-    borderTopColor: '#8b00e8',
+    borderTopColor: colors.cyan,
     padding: 18,
   },
   cardHeaderRow: {
@@ -317,12 +317,12 @@ const styles = StyleSheet.create({
   periodLabel: {
     fontFamily: fonts.bold,
     fontSize: 10,
-    color: '#8300dc',
+    color: colors.cyanDark,
     letterSpacing: 0.5,
-    backgroundColor: '#f1e3ff',
+    backgroundColor: colors.cyanSoft,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 4,
+    borderRadius: radii.sm,
     overflow: 'hidden',
     alignSelf: 'flex-start',
     marginBottom: 8,
@@ -336,20 +336,20 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   calcRow: {
-    backgroundColor: '#f7f9fb',
+    backgroundColor: colors.surfaceSoft,
     padding: 14,
-    borderRadius: 8,
+    borderRadius: radii.md,
     alignItems: 'center',
   },
   payableBox: {
-    backgroundColor: '#fbf7ff',
-    borderWidth: 2,
-    borderColor: '#8500e8',
+    backgroundColor: colors.cyanSoft,
+    borderWidth: 1.5,
+    borderColor: colors.cyan,
   },
   calcLabel: {
     fontFamily: fonts.semibold,
     fontSize: 11,
-    color: '#8397b1',
+    color: colors.muted,
     marginBottom: 4,
   },
   calcValue: {
@@ -365,15 +365,15 @@ const styles = StyleSheet.create({
   operatorText: {
     fontFamily: fonts.medium,
     fontSize: 20,
-    color: '#8ba0b9',
+    color: colors.subtle,
   },
   warningBox: {
     flexDirection: 'row',
-    backgroundColor: '#fffaf0',
+    backgroundColor: colors.yellowSoft,
     borderWidth: 1,
-    borderColor: '#ffe5a3',
+    borderColor: "rgba(255, 179, 0, 0.3)",
     padding: 12,
-    borderRadius: 8,
+    borderRadius: radii.md,
     marginTop: 20,
     gap: 10,
   },
@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: fonts.regular,
     fontSize: 12,
-    color: '#9a5a00',
+    color: "#9A6500",
     lineHeight: 18,
   },
   historyMonth: {
@@ -391,7 +391,7 @@ const styles = StyleSheet.create({
   },
   historyGrid: {
     marginTop: 12,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.md,
@@ -418,7 +418,7 @@ const styles = StyleSheet.create({
   historyDash: {
     fontFamily: fonts.medium,
     fontSize: 13,
-    color: '#8ba0b9',
+    color: colors.subtle,
   },
   sheetHeader: {
     padding: 20,
@@ -431,7 +431,7 @@ const styles = StyleSheet.create({
   sheetSubtitle: {
     fontFamily: fonts.bold,
     fontSize: 10,
-    color: '#8300dc',
+    color: colors.cyanDark,
     letterSpacing: 0.5,
     marginBottom: 4,
   },

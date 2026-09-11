@@ -367,8 +367,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 16,
   },
-  bgBlue: { backgroundColor: 'rgba(7, 29, 67, 0.1)' },
-  bgPurple: { backgroundColor: 'rgba(125, 31, 232, 0.12)' },
+  bgBlue: { backgroundColor: colors.cyanSoft, borderWidth: 1, borderColor: "rgba(0, 156, 212, 0.15)" },
+  bgPurple: { backgroundColor: colors.cyanSoft, borderWidth: 1, borderColor: "rgba(0, 156, 212, 0.15)" },
   contactTitle: {
     fontFamily: fonts.bold,
     fontSize: 16,
