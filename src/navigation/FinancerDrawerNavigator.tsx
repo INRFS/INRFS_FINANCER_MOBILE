@@ -1,7 +1,7 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useState, type ComponentType } from "react";
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../auth/AuthContext";
 import { Ionicons } from "../components/AppIcon";
 import { Logo } from "../components/Logo";
@@ -95,6 +95,8 @@ function MoreScreen() {
 
 export function FinancerDrawerNavigator() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const insets = useSafeAreaInsets();
+  const bottomInset = Math.max(insets.bottom, 8);
   return (
     <View style={s.app}>
       <PortalHeader onNotifications={() => setNotificationsOpen(true)} />
@@ -105,7 +107,7 @@ export function FinancerDrawerNavigator() {
           tabBarActiveTintColor: colors.cyan,
           tabBarInactiveTintColor: colors.subtle,
           tabBarLabelStyle: s.navText,
-          tabBarStyle: s.nav,
+          tabBarStyle: [s.nav, { height: 56 + bottomInset, paddingBottom: bottomInset }],
         })}
       >
         <Tab.Screen name="Dashboard" component={DashboardScreen} />

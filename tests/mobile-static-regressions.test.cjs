@@ -39,6 +39,16 @@ test("financer tab icons use a named component", () => {
   assert.match(file, /return function TabIcon/);
 });
 
+test("mobile navigation bars respect Android button and gesture safe areas", () => {
+  const admin = source("src/screens/admin/LiveAdminAppScreen.tsx");
+  const financer = source("src/navigation/FinancerDrawerNavigator.tsx");
+  const legacyFinancer = source("src/screens/financer/FinancerAppScreen.tsx");
+  assert.match(admin, /<SafeAreaView edges=\{\["bottom"\]\} style=\{styles\.nav\}>/);
+  assert.match(financer, /const bottomInset = Math\.max\(insets\.bottom, 8\)/);
+  assert.match(financer, /height: 56 \+ bottomInset, paddingBottom: bottomInset/);
+  assert.match(legacyFinancer, /<SafeAreaView edges=\{\["bottom"\]\} style=\{styles\.bottomNav\}>/);
+});
+
 test("financer More excludes schedule and notifications while header opens notifications", () => {
   const file = source("src/navigation/FinancerDrawerNavigator.tsx");
   const moreItems = file.slice(file.indexOf("const moreItems"), file.indexOf("const moreScreens"));
@@ -60,6 +70,16 @@ test("admin Financers header does not expose Add action", () => {
   assert.ok(headerStart >= 0 && headerEnd > headerStart);
   assert.doesNotMatch(file.slice(headerStart, headerEnd), /label="Add"/);
   assert.match(file.slice(headerStart, headerEnd), /label="Usage"/);
+});
+
+test("landing screen uses one centralized login for admin and financer accounts", () => {
+  const file = source("src/screens/auth/AuthScreens.tsx");
+  const landing = file.slice(file.indexOf("export function PortalSelectionScreen"), file.indexOf("type LoginProps"));
+  assert.match(landing, /Email or Mobile Number/);
+  assert.match(landing, /normalizedIdentifier\.includes\("@"\)/);
+  assert.match(landing, /api\.post\("\/auth\/login"/);
+  assert.match(landing, /api\.post\("\/auth\/login\/financer"/);
+  assert.doesNotMatch(landing, /PortalCard|Choose your portal/);
 });
 
 test("loan interest uses contractual month periods in both creation flows", () => {
@@ -122,6 +142,8 @@ test("API transport has timeout and friendly network errors", () => {
   assert.match(file, /REQUEST_TIMEOUT_MS = 20_000/);
   assert.match(file, /The request timed out\. Check your connection and try again\./);
   assert.match(file, /Unable to connect\. Check your internet connection and try again\./);
+  assert.match(file, /const url = `\$\{API_BASE_URL\}/);
+  assert.doesNotMatch(file, /candidateBases|app\.inrfs\.com|financer-api/);
 });
 
 test("service-charge status and effective date are persisted", () => {

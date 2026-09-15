@@ -8,7 +8,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Logo } from "../../components/Logo";
 import { Button, Card, Field, Header, IconBubble, InlineAlert, Screen } from "../../components/ui";
 import { BottomOceanWaves, TopOceanHeaderDecor } from "../../components/OceanDecorations";
-import { colors, fonts, radii, shadows, spacing } from "../../theme/tokens";
+import { colors, fonts, radii, shadows } from "../../theme/tokens";
 import type { RootStackParamList } from "../../types/navigation";
 import { api } from "../../services/apiClient";
 import { useAuth } from "../../auth/AuthContext";
@@ -27,29 +27,121 @@ const validPlace = (value: string) => {
 
 type PortalProps = NativeStackScreenProps<RootStackParamList, "PortalSelection">;
 export function PortalSelectionScreen({ navigation }: PortalProps) {
-  return (
-    <LinearGradient colors={["#EAF6FA", "#E0F7FA", "#CEF3FB"]} style={styles.flex}>
-      <SafeAreaView style={styles.portalSafe}>
-        <View style={[styles.petal, styles.petalTop]} />
-        <View style={[styles.petal, styles.petalBottom]} />
-        <Logo size={62} />
-        <View style={styles.portalTitle}>
-          <Text style={styles.title}>Welcome to INRFS Platform</Text>
-          <Text style={styles.subtitle}>Choose your portal to continue</Text>
-        </View>
-        <View style={styles.portalCards}>
-          <PortalCard icon="person-outline" accent="cyan" title="Financer Portal" subtitle="Manage customers, loans & collections" onPress={() => navigation.navigate("FinancerLogin")} />
-          <PortalCard icon="grid-outline" accent="purple" title="Admin Portal" subtitle="Platform management & oversight" onPress={() => navigation.navigate("AdminLogin")} />
-        </View>
-        <View style={styles.legalLinks}><Text style={styles.link} onPress={() => navigation.navigate("LegalNotice", { type: "privacy" })}>Privacy Policy</Text><Text style={styles.link} onPress={() => navigation.navigate("LegalNotice", { type: "terms" })}>Terms of Use</Text></View>
-        <Text style={styles.copyright}>INRFS © 2026 · Secure Fintech Platform</Text>
-      </SafeAreaView>
-    </LinearGradient>
-  );
-}
+  const { completeLogin } = useAuth();
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [forgotPassword, setForgotPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-function PortalCard({ icon, accent, title, subtitle, onPress }: { icon: "person-outline" | "grid-outline"; accent: "cyan" | "purple"; title: string; subtitle: string; onPress: () => void }) {
-  return <Pressable onPress={onPress} style={({ pressed }) => [styles.portalCard, pressed && { transform: [{ scale: 0.98 }], opacity: 0.88 }]}><IconBubble icon={icon} accent={accent} size={56} /><Text style={styles.portalCardTitle}>{title}</Text><Text style={styles.portalCardSub}>{subtitle}</Text></Pressable>;
+  const submit = async () => {
+    if (forgotPassword) {
+      if (!validEmail(forgotEmail)) return setError("Enter your registered email address.");
+      setSubmitting(true); setError("");
+      try {
+        await api.post("/auth/password/forgot", { email: forgotEmail.trim().toLowerCase() }, { auth: false });
+        setError("If this account exists, password reset instructions have been sent.");
+      } catch (requestError) {
+        setError(requestError instanceof Error ? requestError.message : "Unable to request a password reset.");
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    const normalizedIdentifier = identifier.trim();
+    const adminLogin = normalizedIdentifier.includes("@");
+    const mobile = indianMobile(normalizedIdentifier);
+    if (adminLogin ? !validEmail(normalizedIdentifier) : !/^[6-9]\d{9}$/.test(mobile)) {
+      return setError("Enter a valid admin email or 10-digit financer mobile number.");
+    }
+    if (!password) return setError("Enter your password.");
+    if (password.length > 128) return setError("Password cannot exceed 128 characters.");
+
+    setSubmitting(true); setError("");
+    try {
+      if (adminLogin) {
+        const email = normalizedIdentifier.toLowerCase();
+        const challenge = await api.post("/auth/login", { email, password, portal: "admin" }, { auth: false });
+        navigation.navigate("FinancerOtp", { email, challengeId: challenge.challengeId, admin: true });
+      } else {
+        const tokens = await api.post("/auth/login/financer", { email: mobile, password, portal: "financer" }, { auth: false });
+        const roles = tokens?.user?.roles;
+        if (Array.isArray(roles) && !roles.some((role: string) => ["FinancerOwner", "FinancerManager", "LoanOfficer", "CollectionAgent"].includes(role))) {
+          throw new Error("This account does not have access to the financer portal.");
+        }
+        await completeLogin(tokens);
+      }
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to sign in.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <AuthShell>
+      <Logo size={48} />
+      <View style={styles.authHeading}>
+        <Text style={styles.authTitle}>{forgotPassword ? "Reset your password" : "Welcome to INRFS"}</Text>
+        <Text style={styles.authSub}>
+          {forgotPassword
+            ? "Enter your registered email address to receive reset instructions."
+            : "Sign in with your admin email or financer mobile number."}
+        </Text>
+      </View>
+      {forgotPassword ? (
+        <Field
+          label="Registered Email"
+          placeholder="you@example.com"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+          value={forgotEmail}
+          onChangeText={(value) => { setForgotEmail(value.replace(/\s/g, "")); setError(""); }}
+          maxLength={254}
+        />
+      ) : (
+        <>
+          <Field
+            label="Email or Mobile Number"
+            placeholder="admin@inrfs.in or 9876543210"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            value={identifier}
+            onChangeText={(value) => { setIdentifier(value.replace(/\s/g, "")); setError(""); }}
+            maxLength={254}
+          />
+          <View style={styles.fieldBlock}>
+            <View style={styles.passwordWrap}>
+              <Field
+                label="Password"
+                placeholder="Enter password"
+                secureTextEntry={!passwordVisible}
+                value={password}
+                onChangeText={(value) => { setPassword(value); setError(""); }}
+                maxLength={128}
+              />
+              <Pressable onPress={() => setPasswordVisible((visible) => !visible)} style={styles.eyeBtn}>
+                <Ionicons name={passwordVisible ? "eye-off-outline" : "eye-outline"} size={20} color={colors.muted} />
+              </Pressable>
+            </View>
+          </View>
+        </>
+      )}
+      <InlineAlert message={error} type={error.includes("sent") ? "info" : "error"} />
+      <Button loading={submitting} label={forgotPassword ? "Send Reset Instructions" : "Sign In"} onPress={() => void submit()} style={styles.fullButton} />
+      <Pressable onPress={() => { setForgotPassword((current) => !current); setError(""); }} style={styles.forgotBtn}>
+        <Text style={styles.forgotLink}>{forgotPassword ? "Back to sign in" : "Forgot password?"}</Text>
+      </Pressable>
+      {!forgotPassword ? <Text style={styles.authLinkText}>New to INRFS? <Text style={styles.link} onPress={() => navigation.navigate("FinancerRegister")}>Create account</Text></Text> : null}
+      <View style={styles.legalLinks}><Text style={styles.link} onPress={() => navigation.navigate("LegalNotice", { type: "privacy" })}>Privacy Policy</Text><Text style={styles.link} onPress={() => navigation.navigate("LegalNotice", { type: "terms" })}>Terms of Use</Text></View>
+      <Text style={styles.copyright}>INRFS © 2026 · Secure Fintech Platform</Text>
+    </AuthShell>
+  );
 }
 
 type LoginProps = NativeStackScreenProps<RootStackParamList, "FinancerLogin">;
@@ -212,7 +304,7 @@ export function FinancerRegisterScreen({ navigation }: RegisterProps) {
       <Field label="State" placeholder="Gujarat" value={form.state} onChangeText={(v) => update("state", v)} maxLength={100} />
       <InlineAlert message={error} />
       <Button loading={submitting} label="Send OTP to Verify" onPress={submit} style={styles.fullButton} />
-      <Text style={styles.authLinkText}>Already have an account? <Text style={styles.link} onPress={() => navigation.navigate("FinancerLogin")}>Login</Text></Text>
+      <Text style={styles.authLinkText}>Already have an account? <Text style={styles.link} onPress={() => navigation.navigate("PortalSelection")}>Login</Text></Text>
     </AuthShell>
   );
 }
@@ -232,7 +324,7 @@ export function FinancerOtpScreen({ navigation, route }: OtpProps) {
       if (route.params.registering) {
         await api.post("/auth/otp/verify-registration", { challengeId, code: otp }, { auth: false });
         Alert.alert("Account created", "Your account was verified. Sign in with the temporary password sent to you.");
-        navigation.replace("FinancerLogin");
+        navigation.replace("PortalSelection");
       } else {
         const tokens = await api.post("/auth/otp/verify", { challengeId, code: otp }, { auth: false });
         await completeLogin(tokens);
@@ -264,7 +356,7 @@ export function FinancerOtpScreen({ navigation, route }: OtpProps) {
       <Button loading={submitting} label="Verify OTP" onPress={verify} style={styles.fullButton} />
       <View style={styles.twoButtons}>
         <Button disabled={submitting} label="Resend OTP" variant="secondary" style={styles.flex} onPress={() => void resend()} />
-        <Button disabled={submitting} label="Change Email" variant="secondary" style={styles.flex} onPress={() => navigation.replace(route.params.registering ? "FinancerRegister" : route.params.admin ? "AdminLogin" : "FinancerLogin")} />
+        <Button disabled={submitting} label="Change Sign-in" variant="secondary" style={styles.flex} onPress={() => navigation.replace(route.params.registering ? "FinancerRegister" : "PortalSelection")} />
       </View>
     </AuthShell>
   );
@@ -370,7 +462,7 @@ export function ResetPasswordScreen({ navigation, route }: ResetProps) {
     try {
       await api.post("/auth/password/reset", { token: token.trim(), newPassword: password, confirmPassword }, { auth: false });
       Alert.alert("Password reset", "Sign in with your new password.");
-      navigation.replace("FinancerLogin");
+      navigation.replace("PortalSelection");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Password reset failed.");
     } finally {
@@ -390,7 +482,7 @@ export function ResetPasswordScreen({ navigation, route }: ResetProps) {
       <Field label="Confirm password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry maxLength={128} />
       <InlineAlert message={error} />
       <Button loading={submitting} label="Reset password" onPress={() => void submit()} style={styles.fullButton} />
-      <Button label="Back to sign in" variant="ghost" onPress={() => navigation.replace("FinancerLogin")} />
+      <Button label="Back to sign in" variant="ghost" onPress={() => navigation.replace("PortalSelection")} />
     </AuthShell>
   );
 }
@@ -457,7 +549,7 @@ function AuthShell({ children }: { children: React.ReactNode }) {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   portalSafe: { flex: 1, alignItems: "center", justifyContent: "center", padding: 22, overflow: "hidden" },
-  legalLinks: { flexDirection: "row", gap: 20, marginTop: 20 },
+  legalLinks: { flexDirection: "row", justifyContent: "center", gap: 20, marginTop: 8 },
   legalStatus: { color: colors.orange, fontFamily: fonts.medium, fontSize: 13, lineHeight: 20, marginBottom: 18 },
   legalHeading: { color: colors.dark, fontFamily: fonts.bold, fontSize: 17, marginTop: 14, marginBottom: 6 },
   legalBody: { color: colors.muted, fontFamily: fonts.regular, fontSize: 14, lineHeight: 22 },
@@ -471,7 +563,7 @@ const styles = StyleSheet.create({
   portalCard: { flex: 1, minHeight: 190, padding: 16, alignItems: "center", justifyContent: "center", backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.border, borderRadius: radii.xl, ...shadows.card },
   portalCardTitle: { color: colors.dark, fontFamily: fonts.bold, fontSize: 14, marginTop: 17, textAlign: "center" },
   portalCardSub: { color: colors.muted, fontFamily: fonts.regular, fontSize: 10, lineHeight: 15, textAlign: "center", marginTop: 7 },
-  copyright: { color: colors.subtle, fontFamily: fonts.regular, fontSize: 10, marginTop: 30 },
+  copyright: { color: colors.subtle, fontFamily: fonts.regular, fontSize: 10, marginTop: 2, textAlign: "center" },
 
   authSafe: { flex: 1, backgroundColor: colors.background },
   ambient: { ...StyleSheet.absoluteFillObject, overflow: "hidden", zIndex: -1 },

@@ -74,37 +74,20 @@ export async function apiRequest(path: string, options: RequestOptions = {}): Pr
   const headers = new Headers(options.headers);
   if (!(options.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (accessToken && options.auth !== false) headers.set("Authorization", `Bearer ${accessToken}`);
-  const candidateBases = Array.from(new Set([
-    API_BASE_URL,
-    "https://financer.inrfs.com/api/v1",
-    "https://financer.inrfs.com/financer-api/api/v1",
-    "https://app.inrfs.com/financer-api/api/v1",
-  ]));
-
+  const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
   const controller = new AbortController();
   const forwardAbort = () => controller.abort();
   options.signal?.addEventListener("abort", forwardAbort, { once: true });
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   const request = async () => {
-    let lastError: unknown = null;
-    for (const base of candidateBases) {
-      const url = `${base}${path.startsWith("/") ? path : `/${path}`}`;
-      try {
-        const res = await fetch(url, { ...options, headers, signal: controller.signal });
-        if (res.status === 404 || res.status === 502 || res.status === 503) {
-          // If a candidate returns 404/502/503, try next candidate
-          continue;
-        }
-        return res;
-      } catch (err) {
-        lastError = err;
-        if (controller.signal.aborted) break;
+    try {
+      return await fetch(url, { ...options, headers, signal: controller.signal });
+    } catch {
+      if (controller.signal.aborted) {
+        throw new ApiError(options.signal?.aborted ? "Request cancelled." : "The request timed out. Check your connection and try again.", 0);
       }
+      throw new ApiError("Unable to connect. Check your internet connection and try again.", 0);
     }
-    if (controller.signal.aborted) {
-      throw new ApiError(options.signal?.aborted ? "Request cancelled." : "The request timed out. Check your connection and try again.", 0);
-    }
-    throw new ApiError("Unable to connect. Check your internet connection and try again.", 0);
   };
   let response;
   try {
