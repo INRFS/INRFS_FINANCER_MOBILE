@@ -50,8 +50,9 @@ export function Screen({ children, contentStyle, scroll = true }: { children: Re
         <View style={styles.ambientWaveTop} />
         <View style={styles.ambientWaveBottom} />
         <View style={styles.ambientWaveAccent} />
+        <BottomOceanWaves height={100} style={styles.screenBottomWave} />
       </View>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1, zIndex: 1 }}>
         {scroll ? (
           <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.screen, contentStyle]} showsVerticalScrollIndicator={false}>
             {children}
@@ -60,8 +61,22 @@ export function Screen({ children, contentStyle, scroll = true }: { children: Re
           <View style={[styles.screen, { flex: 1 }, contentStyle]}>{children}</View>
         )}
       </KeyboardAvoidingView>
-      <BottomOceanWaves height={84} style={styles.screenBottomWave} />
     </SafeAreaView>
+  );
+}
+
+export function InlineAlert({ message, type = "error", style }: { message?: string | null; type?: "error" | "warning" | "info" | "success"; style?: StyleProp<ViewStyle> }) {
+  if (!message) return null;
+  const isErr = type === "error";
+  const bg = isErr ? colors.errorSoft : type === "warning" ? colors.yellowSoft : type === "success" ? colors.greenSoft : colors.cyanSoft;
+  const fg = isErr ? colors.error : type === "warning" ? colors.orange : type === "success" ? colors.green : colors.cyanDark;
+  const icon = isErr ? "alert-circle" : type === "warning" ? "warning-outline" : type === "success" ? "checkmark-circle-outline" : "information-circle-outline";
+
+  return (
+    <View style={[styles.inlineAlert, { backgroundColor: bg, borderColor: isErr ? "rgba(229,57,53,0.25)" : "rgba(0,156,212,0.2)" }, style]}>
+      <Ionicons name={icon} size={17} color={fg} />
+      <Text style={[styles.inlineAlertText, { color: fg }]}>{message}</Text>
+    </View>
   );
 }
 
@@ -380,6 +395,22 @@ const styles = StyleSheet.create({
   toggleCopy: { flex: 1 },
   rowTitle: { color: colors.dark, fontFamily: fonts.semibold, fontSize: 13, flexShrink: 1 },
   rowMeta: { color: colors.muted, fontFamily: fonts.regular, fontSize: 11, lineHeight: 16, marginTop: 2, flexShrink: 1 },
+  inlineAlert: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    marginVertical: 4,
+  },
+  inlineAlertText: {
+    flex: 1,
+    fontFamily: fonts.medium,
+    fontSize: 12,
+    lineHeight: 17,
+  },
   dataRow: {
     minWidth: 0,
     minHeight: 64,

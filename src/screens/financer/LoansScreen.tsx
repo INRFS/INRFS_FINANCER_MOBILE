@@ -75,7 +75,6 @@ const installmentSummary = (loan: any) => {
   return { total, paid, pending, tenure, installmentAmount };
 };
 
-import { BottomOceanWaves } from "../../components/OceanDecorations";
 
 export function LoansScreen() {
   const load = useCallback(async () => {
@@ -144,8 +143,7 @@ export function LoansScreen() {
         keyExtractor={x => x.id}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 80, gap: 14 }}
-        ListFooterComponent={<BottomOceanWaves height={100} style={{ marginTop: 14 }} />}
+        contentContainerStyle={{ paddingBottom: 110, gap: 14 }}
         ListHeaderComponent={
           <View style={s.gap}>
             <Header

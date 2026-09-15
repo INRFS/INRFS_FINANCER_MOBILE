@@ -12,7 +12,6 @@ import { localDateOnly } from "../../utils/date";
 import { formatInr } from "../../utils/format";
 import { collectionInterestForFrequency, totalInterestForDuration } from "./loanInterest";
 import { resolveAddressByPin, suggestAddresses, type AddressMatch } from "../../utils/addressLookup";
-import { BottomOceanWaves } from "../../components/OceanDecorations";
 
 const todayISO = () => localDateOnly();
 
@@ -232,8 +231,7 @@ export function CustomersScreen() {
         keyExtractor={x => x.id}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 80, gap: 14 }}
-        ListFooterComponent={<BottomOceanWaves height={100} style={{ marginTop: 14 }} />}
+        contentContainerStyle={{ paddingBottom: 110, gap: 14 }}
         ListHeaderComponent={
           <View style={{ gap: spacing.xl }}>
             <Header
@@ -379,7 +377,6 @@ function CustomerDetailsModal({ customer, products, initialEdit = false, close, 
             {tab === "Ledger" && <LedgerTab customer={detailsCustomer} />}
             {tab === "Documents" && <CustomerDocuments customer={detailsCustomer} />}
           </View>
-          <BottomOceanWaves height={100} style={{ marginTop: 24 }} />
         </ScrollView>
       </View>
 

@@ -166,7 +166,7 @@ export function SupportScreen() {
       <FlatList
         data={tickets}
         keyExtractor={(item: any) => item.id}
-        contentContainerStyle={{ paddingBottom: 80 }}
+        contentContainerStyle={{ paddingBottom: 110 }}
         ListHeaderComponent={
           <>
             <Text style={styles.sectionHeading}>QUICK SUPPORT</Text>
