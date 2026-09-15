@@ -7,7 +7,6 @@ import { RemoteState, useRemote } from "./shared";
 import { s } from "./styles";
 import { Ionicons } from "../../components/AppIcon";
 import { colors, fonts, radii, spacing } from "../../theme/tokens";
-import { BottomOceanWaves } from "../../components/OceanDecorations";
 
 const MONTHS: Record<string, number> = {
   Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
@@ -241,8 +240,7 @@ export function DueOverdueScreen() {
         nestedScrollEnabled
         data={filteredItems}
         keyExtractor={(item, idx) => item.id || `${item.loanId}-${idx}`}
-        contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: 120, gap: 14, flexGrow: 1 }}
-        ListFooterComponent={<BottomOceanWaves height={100} style={{ marginTop: 14 }} />}
+        contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: 110, gap: 14, flexGrow: 1 }}
         ListHeaderComponent={listHeader}
         ListEmptyComponent={
           !state.loading ? (

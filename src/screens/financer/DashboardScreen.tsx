@@ -280,8 +280,11 @@ export function DashboardScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
       <View pointerEvents="none" style={styles.ambient}>
+        <TopOceanHeaderDecor style={styles.topHeaderDecor} />
         <View style={styles.ambientWaveTop} />
         <View style={styles.ambientWaveBottom} />
+        <View style={styles.ambientWaveAccent} />
+        <BottomOceanWaves height={100} style={styles.screenBottomWave} />
       </View>
       
       <ScrollView 
@@ -355,7 +358,7 @@ export function DashboardScreen() {
                   </View>
                   <View style={styles.highlightContent}>
                     <Text style={styles.highlightLabel}>TOTAL INTEREST COLLECTED</Text>
-                    <Text style={styles.highlightValue}>
+                    <Text style={styles.highlightValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>
                       {rupees(
                         d.totalInterestCollected ??
                         d.total_interest_collected ??
@@ -369,7 +372,7 @@ export function DashboardScreen() {
                   </View>
                 </View>
                 <View style={styles.highlightSparkline}>
-                  <SparklineWave width={100} height={34} color={colors.cyan} />
+                  <SparklineWave width={94} height={34} color={colors.cyan} />
                 </View>
               </View>
             </View>
@@ -442,7 +445,6 @@ export function DashboardScreen() {
             </View>
           </>
         ) : null}
-        <BottomOceanWaves height={110} style={{ marginHorizontal: -spacing.lg, marginTop: 16 }} />
       </ScrollView>
 
       <Modal visible={!!recordModalItem} transparent animationType="slide" onRequestClose={() => !isSubmitting && setRecordModalItem(null)}>
@@ -518,7 +520,9 @@ export function DashboardScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  ambient: { ...StyleSheet.absoluteFillObject, overflow: "hidden" },
+  ambient: { ...StyleSheet.absoluteFillObject, overflow: "hidden", zIndex: -1 },
+  topHeaderDecor: { position: "absolute", top: -15, right: -10 },
+  screenBottomWave: { position: "absolute", bottom: 0, left: 0, right: 0 },
   ambientWaveTop: {
     position: "absolute",
     width: 320,
@@ -537,7 +541,16 @@ const styles = StyleSheet.create({
     bottom: -140,
     left: -100,
   },
-  screen: { padding: spacing.lg, paddingTop: spacing.xl, paddingBottom: 104, gap: spacing.xl },
+  ambientWaveAccent: {
+    position: "absolute",
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    backgroundColor: "rgba(224, 247, 250, 0.6)",
+    top: "35%",
+    right: -100,
+  },
+  screen: { padding: spacing.lg, paddingTop: spacing.md, paddingBottom: 110, gap: spacing.lg },
   
   headerCard: {
     backgroundColor: colors.white,
@@ -567,7 +580,7 @@ const styles = StyleSheet.create({
 
   statsGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md, justifyContent: "space-between" },
   statCard: {
-    width: "47.5%",
+    width: "48%",
     minHeight: 124,
     backgroundColor: colors.white,
     padding: 16,
@@ -611,8 +624,8 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   highlightIcon: {
-    width: 40,
-    height: 40,
+    width: 42,
+    height: 42,
     borderRadius: radii.md,
     backgroundColor: colors.greenSoft,
     alignItems: "center",
@@ -622,8 +635,8 @@ const styles = StyleSheet.create({
   },
   highlightContent: { flex: 1, minWidth: 0 },
   highlightLabel: { color: colors.muted, fontFamily: fonts.bold, fontSize: 10, letterSpacing: 0.5 },
-  highlightValue: { color: colors.dark, fontFamily: fonts.extrabold, fontSize: 18, marginTop: 2 },
-  highlightSparkline: { marginLeft: 8 },
+  highlightValue: { color: colors.dark, fontFamily: fonts.extrabold, fontSize: 19, marginTop: 2 },
+  highlightSparkline: { marginLeft: 8, flexShrink: 0 },
 
   chartCard: { gap: 8 },
   chartHeader: { gap: 4 },

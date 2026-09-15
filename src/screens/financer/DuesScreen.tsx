@@ -6,7 +6,6 @@ import { RemoteState, useRemote } from "./shared";
 import { s } from "./styles";
 import { localDateOnly } from "../../utils/date";
 import { formatInr } from "../../utils/format";
-import { BottomOceanWaves } from "../../components/OceanDecorations";
 
 const rupees = formatInr;
 const dateOnly = () => localDateOnly();
@@ -69,7 +68,7 @@ export function DuesScreen() {
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <Screen scroll={false} contentStyle={{ paddingBottom: 0 }}>
       <FlatList
         style={{ flex: 1 }}
         nestedScrollEnabled
@@ -78,8 +77,7 @@ export function DuesScreen() {
         keyExtractor={x => x.id}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: 120, gap: 14, flexGrow: 1 }}
-        ListFooterComponent={<BottomOceanWaves height={100} style={{ marginTop: 14 }} />}
+        contentContainerStyle={{ paddingBottom: 110, gap: 14 }}
         ListHeaderComponent={
           <View style={s.gap}>
             <Header title="Payments & Dues" subtitle="Manage schedules and record payments" action={<Button label="Refresh" variant="ghost" onPress={() => void state.refresh()}/>}/>
@@ -119,7 +117,7 @@ export function DuesScreen() {
               
               {!isSettled && (
                 <View style={[s.row, { marginTop: 12 }]}>
-                  <Button style={s.flex} label="Record Payment" onPress={() => { setSelected(x); setActionKind("payment"); }}/>
+                  <Button style={s.flex} label="Record Payment" icon="add" onPress={() => { setSelected(x); setActionKind("payment"); }}/>
                   <Button style={s.flex} label="Reschedule" variant="secondary" onPress={() => { setSelected(x); setActionKind("reschedule"); }}/>
                 </View>
               )}
@@ -128,7 +126,7 @@ export function DuesScreen() {
           );
         }}
       />
-    </View>
+    </Screen>
   );
 }
 

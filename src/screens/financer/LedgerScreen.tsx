@@ -126,7 +126,7 @@ export function LedgerScreen() {
   const selectedCustomer = ledgerData.customer || customers.find(c => c.id === selectedId);
 
   return (
-    <Screen contentStyle={{ paddingBottom: 80 }}>
+    <Screen contentStyle={{ paddingBottom: 110 }}>
       <Header 
         title="Customer Ledger" 
         subtitle="View customer transactions and balance" 

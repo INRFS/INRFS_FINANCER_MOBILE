@@ -104,7 +104,7 @@ export function FinancerServiceChargeScreen() {
               ?? item.invoiceNumber
               ?? `${item.periodStart ?? item.month ?? "billing"}-${item.periodEnd ?? "period"}-${index}`
           )}
-          contentContainerStyle={{ paddingBottom: 80 }}
+          contentContainerStyle={{ paddingBottom: 110 }}
           ListHeaderComponent={
             <>
               {currentBilling && (

@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
   content: { flex: 1, gap: spacing.md },
   filterCard: { gap: 10, padding: 16 },
   list: { flex: 1 },
-  listContent: { paddingBottom: 90, gap: 12 },
+  listContent: { paddingBottom: 110, gap: 12 },
   scheduleCard: { padding: 16, gap: 14, borderRadius: radii.lg },
   cardHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   flex: { flex: 1 },

@@ -90,7 +90,7 @@ export function ReportsScreen() {
     }
   };
   return (
-    <Screen contentStyle={{ paddingBottom: 80 }}>
+    <Screen contentStyle={{ paddingBottom: 110 }}>
       <Header 
         title="Reports" 
         subtitle="View and export live reports" 
