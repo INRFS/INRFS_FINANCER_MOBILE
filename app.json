@@ -18,7 +18,7 @@
       "bundleIdentifier": "com.inrfs.financer"
     },
     "android": {
-      "versionCode": 5,
+      "versionCode": 7,
       "adaptiveIcon": {
         "foregroundImage": "./assets/inrfs-adaptive-icon.png",
         "backgroundColor": "#F8FAFC"

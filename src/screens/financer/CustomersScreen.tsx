@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { Alert, FlatList, Pressable, ScrollView, Text, View, Modal, StyleSheet, TextInput, KeyboardAvoidingView, Platform, Image } from "react-native";
 import { Button, Card, DataRow, Field, Header, Screen, Segmented, Badge, KpiCard, Grid } from "../../components/ui";
@@ -7,11 +7,12 @@ import { RemoteState, useRemote } from "./shared";
 import { Ionicons } from "../../components/AppIcon";
 import { colors, fonts, radii, spacing } from "../../theme/tokens";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { downloadAndShareDocument, pickAndUploadDocument, pickDocument, previewPickedDocument, takePhoto, uploadPickedDocument, type PickedDocument } from "../../services/nativeDocuments";
+import { downloadAndShareDocument, pickAndUploadDocument, pickDocument, previewPickedDocument, takePhoto, type PickedDocument } from "../../services/nativeDocuments";
 import { localDateOnly } from "../../utils/date";
 import { formatInr } from "../../utils/format";
 import { collectionInterestForFrequency, totalInterestForDuration } from "./loanInterest";
 import { resolveAddressByPin, suggestAddresses, type AddressMatch } from "../../utils/addressLookup";
+import { saveCustomerWithDocuments, type CustomerSaveProgress } from "../../services/customerOnboarding";
 
 const todayISO = () => localDateOnly();
 
@@ -331,7 +332,26 @@ export function CustomersScreen() {
 function CustomerDetailsModal({ customer, products, initialEdit = false, close, refreshList }: { customer: any, products: any[], initialEdit?: boolean, close: () => void, refreshList: () => void }) {
   const [tab, setTab] = useState("Overview");
   const [detailsCustomer, setDetailsCustomer] = useState(customer);
+  const [detailsLoading, setDetailsLoading] = useState(true);
+  const [detailsError, setDetailsError] = useState("");
+  const [detailsReload, setDetailsReload] = useState(0);
   const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    let active = true;
+    setDetailsLoading(true);
+    setDetailsError("");
+    // List responses stay masked; fetch the authorized details response on demand.
+    platformApi.customers.get(customer.id)
+      .then(details => {
+        if (active) setDetailsCustomer((current: any) => ({ ...current, ...details }));
+      })
+      .catch(error => {
+        if (active) setDetailsError(error instanceof Error ? error.message : "Could not load customer details.");
+      })
+      .finally(() => { if (active) setDetailsLoading(false); });
+    return () => { active = false; };
+  }, [customer.id, detailsReload]);
   
   const [isEditCustomerOpen, setIsEditCustomerOpen] = useState(initialEdit);
   const [isAddLoanOpen, setIsAddLoanOpen] = useState(false);
@@ -370,6 +390,8 @@ function CustomerDetailsModal({ customer, products, initialEdit = false, close, 
           </View>
 
           <View style={{ paddingHorizontal: 20 }}>
+            {detailsLoading ? <Text style={{ color: colors.muted, marginBottom: 12 }}>Loading customer details...</Text> : null}
+            {detailsError ? <Card style={{ marginBottom: 16 }}><Text style={{ color: colors.error }}>{detailsError}</Text><Button label="Retry details" variant="secondary" onPress={() => setDetailsReload(current => current + 1)} /></Card> : null}
             {tab === "Overview" && <OverviewTab customer={detailsCustomer} />}
             {tab === "Loans" && <LoansTab loans={detailsCustomer.loans || []} />}
             {tab === "Payments" && <PaymentsTab payments={detailsCustomer.payments || []} />}
@@ -410,8 +432,8 @@ function OverviewTab({ customer }: { customer: any }) {
         <DataRow title="Email" subtitle={customer.email || "-"} />
         <DataRow title="Date of Birth" subtitle={customer.dateOfBirth || customer.dob || "-"} />
         <DataRow title="Gender" subtitle={customer.gender || "-"} />
-        <DataRow title="Aadhaar" subtitle={customer.aadhaar || "-"} />
-        <DataRow title="PAN" subtitle={customer.pan || "-"} />
+        <DataRow title="Aadhaar" subtitle={customer.aadhaar || customer.aadhaarMasked || "-"} />
+        <DataRow title="PAN" subtitle={customer.pan || customer.panMasked || "-"} />
       </Card>
       
       <Card style={{ padding: 16 }}>
@@ -592,8 +614,8 @@ function EditCustomerModal({ customer, close, refreshList, onUpdated }: { custom
   const [city, setCity] = useState(customer.city || "");
   const [stateName, setStateName] = useState(customer.state || "");
   const [pinCode, setPinCode] = useState(customer.postalCode || customer.pinCode || "");
-  const aadhaar = customer.aadhaarMasked || customer.aadhaar || "";
-  const pan = customer.panMasked || customer.pan || "";
+  const aadhaar = customer.aadhaar || customer.aadhaarMasked || "";
+  const pan = customer.pan || customer.panMasked || "";
 
   const save = async () => {
     const validationForm = { name, phone, email, dob, gender, houseNumber, street, area, city, stateName, pinCode, aadhaar: "", pan: "" };
@@ -867,6 +889,8 @@ function RecordPaymentModal({ customer, close, refreshList }: { customer: any, c
 function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSaved: () => Promise<void> }) {
   const [step, setStep] = useState(1);
   const [busy, setBusy] = useState(false);
+  const saveProgress = useRef<CustomerSaveProgress>({ uploadedDocuments: new Set() });
+  const saveInFlight = useRef(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -881,11 +905,11 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
   const [pinCode, setPinCode] = useState("");
   const [aadhaar, setAadhaar] = useState("");
   const [pan, setPan] = useState("");
-  const [aadhaarDoc, setAadhaarDoc] = useState<any>(null);
-  const [panDoc, setPanDoc] = useState<any>(null);
-  const [addressProof, setAddressProof] = useState<any>(null);
-  const [photograph, setPhotograph] = useState<any>(null);
-  const [otherDocuments, setOtherDocuments] = useState<any>(null);
+  const [aadhaarDoc, setAadhaarDoc] = useState<PickedDocument | null>(null);
+  const [panDoc, setPanDoc] = useState<PickedDocument | null>(null);
+  const [addressProof, setAddressProof] = useState<PickedDocument | null>(null);
+  const [photograph, setPhotograph] = useState<PickedDocument | null>(null);
+  const [otherDocuments, setOtherDocuments] = useState<PickedDocument | null>(null);
   const [previewDocument, setPreviewDocument] = useState<PickedDocument | null>(null);
   const [citySuggestions, setCitySuggestions] = useState<AddressMatch[]>([]);
   const [stateSuggestions, setStateSuggestions] = useState<AddressMatch[]>([]);
@@ -953,6 +977,7 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
   };
 
   const save = async () => {
+    if (saveInFlight.current) return;
     for (const validationStep of [1, 2, 3]) {
       const error = validateCustomerStep(validationStep, formForValidation);
       if (error) return Alert.alert("Check customer details", error);
@@ -960,10 +985,18 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
     if (!aadhaarDoc || !panDoc || !addressProof || !photograph) {
       return Alert.alert("Required documents", "Upload Aadhaar, PAN, address proof, and photograph before saving the customer.");
     }
+    saveInFlight.current = true;
     setBusy(true);
     try {
       const mobile = normalizeIndianMobile(phone);
-      const created = await platformApi.customers.create({
+      const documents = [
+        { asset: aadhaarDoc, category: "Aadhaar" },
+        { asset: panDoc, category: "Pan" },
+        { asset: addressProof, category: "AddressProof" },
+        { asset: photograph, category: "Photograph" },
+        ...(otherDocuments ? [{ asset: otherDocuments, category: "Other" }] : []),
+      ];
+      await saveCustomerWithDocuments({
         fullName: name.trim(),
         dateOfBirth: dob || null,
         gender,
@@ -976,13 +1009,14 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
         postalCode: pinCode.trim(),
         aadhaar: aadhaar.replace(/\D/g, '') || null,
         pan: pan.trim().toUpperCase() || null
-      });
-      const uploads = [[aadhaarDoc, "Aadhaar"], [panDoc, "Pan"], [addressProof, "AddressProof"], [photograph, "Photograph"], [otherDocuments, "Other"]].filter(([doc]) => doc !== null);
-      await Promise.all(uploads.map(([doc, category]) => uploadPickedDocument(doc, category as string, { customerId: created.id })));
+      }, documents, saveProgress.current);
       await onSaved();
     } catch (e) {
-      Alert.alert("Customer not saved", e instanceof Error ? e.message : "Error saving");
+      const error = e instanceof Error ? e.message : "Error saving";
+      Alert.alert(saveProgress.current.customerId ? "Customer documents incomplete" : "Customer not saved",
+        saveProgress.current.customerId ? `${error}\n\nThe customer record exists. Tap Save Customer again to retry the remaining documents without creating another customer.` : error);
     } finally {
+      saveInFlight.current = false;
       setBusy(false);
     }
   };
@@ -1073,7 +1107,7 @@ function AddCustomerWizard({ onCancel, onSaved }: { onCancel: () => void, onSave
           <Card>
             <Text style={{ fontFamily: fonts.bold, fontSize: 16, marginBottom: 12 }}>KYC Documents</Text>
             <View style={{ gap: 16 }}>
-              <Text style={{ color: colors.muted }}>Aadhaar, PAN, address proof, and photograph are required. Other documents are optional.</Text>
+              <Text style={{ color: colors.muted }}>Aadhaar, PAN, address proof, and photograph are required. Other documents are optional. Each file must be smaller than 10 MB.</Text>
               {documentRow(aadhaarDoc, "Select Aadhaar Document *", () => chooseDocumentSource("Aadhaar Document", setAadhaarDoc))}
               {documentRow(panDoc, "Select PAN Document *", () => chooseDocumentSource("PAN Document", setPanDoc))}
               {documentRow(addressProof, "Select Address Proof *", () => chooseDocumentSource("Address Proof", setAddressProof))}

@@ -7,6 +7,100 @@ const ts = require("typescript");
 const root = path.resolve(process.cwd());
 const source = relative => fs.readFileSync(path.join(root, relative), "utf8");
 
+function loadTsModule(relative, mocks) {
+  const compiled = ts.transpileModule(source(relative), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  const module = { exports: {} };
+  new Function("require", "exports", "module", compiled)(name => mocks[name] || {}, module.exports, module);
+  return module.exports;
+}
+
+test("document uploads validate sizes including picker assets without size metadata", async () => {
+  let info = { exists: true, isDirectory: false, size: 2000 };
+  let inspected = 0;
+  const { validateDocumentForUpload, MAX_DOCUMENT_SIZE_BYTES } = loadTsModule("src/services/nativeDocuments.ts", {
+    "expo-file-system/legacy": { getInfoAsync: async () => { inspected++; return info; } },
+  });
+  const asset = { uri: "file:///document.jpg", name: "document.jpg", mimeType: "image/jpeg" };
+  await validateDocumentForUpload({ ...asset, size: MAX_DOCUMENT_SIZE_BYTES });
+  await assert.rejects(validateDocumentForUpload({ ...asset, size: MAX_DOCUMENT_SIZE_BYTES + 1 }), /smaller than 10 MB/);
+  assert.equal(inspected, 0);
+  await validateDocumentForUpload(asset);
+  assert.equal(inspected, 1);
+  info = { ...info, size: MAX_DOCUMENT_SIZE_BYTES + 1 };
+  await assert.rejects(validateDocumentForUpload(asset), /too large/);
+  info = { exists: false };
+  await assert.rejects(validateDocumentForUpload(asset), /Cannot read/);
+  await assert.rejects(validateDocumentForUpload({ ...asset, size: 0 }), /empty or unreadable/);
+});
+
+test("customer onboarding rejects oversized documents before creating a customer", async () => {
+  let creates = 0;
+  const { saveCustomerWithDocuments } = loadTsModule("src/services/customerOnboarding.ts", {
+    "./platformApi": { platformApi: { customers: { create: async () => { creates++; return { id: "customer-1" }; } } } },
+    "./nativeDocuments": {
+      validateDocumentForUpload: async asset => { if (asset.name === "large.jpg") throw new Error("too large"); },
+      uploadPickedDocument: async () => assert.fail("Must not upload before all documents are validated"),
+    },
+  });
+  await assert.rejects(saveCustomerWithDocuments({}, [
+    { asset: { name: "small.jpg" }, category: "Aadhaar" },
+    { asset: { name: "large.jpg" }, category: "Pan" },
+  ], { uploadedDocuments: new Set() }), /too large/);
+  assert.equal(creates, 0);
+});
+
+test("customer onboarding retries remaining documents without creating duplicates", async () => {
+  let creates = 0;
+  let updates = 0;
+  let failPan = true;
+  const uploads = [];
+  const { saveCustomerWithDocuments } = loadTsModule("src/services/customerOnboarding.ts", {
+    "./platformApi": { platformApi: { customers: {
+      create: async () => { creates++; return { id: "customer-1" }; },
+      get: async id => { assert.equal(id, "customer-1"); return { status: "Suspended" }; },
+      update: async (id, details) => {
+        assert.equal(id, "customer-1");
+        assert.equal(details.status, "Suspended");
+        updates++;
+      },
+    } } },
+    "./nativeDocuments": {
+      validateDocumentForUpload: async () => {},
+      uploadPickedDocument: async (asset, category, owner) => {
+        assert.equal(owner.customerId, "customer-1");
+        uploads.push(category);
+        if (category === "Pan" && failPan) { failPan = false; throw new Error("upload failed"); }
+      },
+    },
+  });
+  const documents = [
+    { asset: { name: "aadhaar.jpg" }, category: "Aadhaar" },
+    { asset: { name: "pan.jpg" }, category: "Pan" },
+  ];
+  const progress = { uploadedDocuments: new Set() };
+  await assert.rejects(saveCustomerWithDocuments({}, documents, progress), /upload failed/);
+  await saveCustomerWithDocuments({}, documents, progress);
+  assert.equal(creates, 1);
+  assert.equal(updates, 1);
+  assert.deepEqual(uploads, ["Aadhaar", "Pan", "Pan"]);
+  assert.equal(progress.uploadedDocuments.size, 2);
+});
+
+test("customer onboarding does not update without a confirmed customer status", async () => {
+  const { saveCustomerWithDocuments } = loadTsModule("src/services/customerOnboarding.ts", {
+    "./platformApi": { platformApi: { customers: {
+      get: async () => ({}),
+      update: async () => assert.fail("Must not reset status when the server value is missing"),
+    } } },
+    "./nativeDocuments": { validateDocumentForUpload: async () => {} },
+  });
+  await assert.rejects(saveCustomerWithDocuments({}, [], {
+    customerId: "customer-1", uploadedDocuments: new Set(),
+  }), /Could not confirm customer status/);
+});
+
 test("customer payment sends the selected backend payment type", () => {
   const file = source("src/screens/financer/CustomersScreen.tsx");
   assert.match(file, /paymentType:\s*type === "Interest Only" \? "InterestOnly"/);
@@ -16,6 +110,13 @@ test("customer payment sends the selected backend payment type", () => {
 test("customer payment exposes every active loan", () => {
   const file = source("src/screens/financer/CustomersScreen.tsx");
   assert.doesNotMatch(file, /activeLoans\.map\([\s\S]{0,160}\.slice\(0,\s*3\)/);
+});
+
+test("customer details fetches exact identity values and prefers them over list masks", () => {
+  const file = source("src/screens/financer/CustomersScreen.tsx");
+  assert.match(file, /platformApi\.customers\.get\(customer\.id\)/);
+  assert.match(file, /title="Aadhaar" subtitle=\{customer\.aadhaar \|\| customer\.aadhaarMasked \|\| "-"\}/);
+  assert.match(file, /title="PAN" subtitle=\{customer\.pan \|\| customer\.panMasked \|\| "-"\}/);
 });
 
 test("customer ledger maps the backend entries envelope and transaction date", () => {

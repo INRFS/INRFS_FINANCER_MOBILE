@@ -69,3 +69,23 @@ after changing it.
 Authentication tokens are persisted with `expo-secure-store`. The access token
 is attached as a bearer token; the refresh token is sent to `/auth/refresh` in
 the request body, matching the native-safe backend contract.
+
+## Document uploads
+
+The API accepts JPEG, PNG, and PDF documents. Each multipart request is capped at
+10 MiB; the app reserves 64 KiB for multipart fields when validating file sizes.
+Configure the production Nginx financer site's `location /api/` with
+`client_max_body_size 12m;` so its default 1 MiB limit does not reject normal
+phone images before the API can validate them. Run `nginx -t` before reloading.
+
+Customer creation validates every selected document before creating a record.
+If an upload fails afterward, retrying Save Customer in the same wizard reuses
+that customer and skips documents already uploaded successfully.
+
+## Customer identity details
+
+Opening Customer Details fetches `GET /customers/{id}` to show the exact saved
+Aadhaar and PAN. This endpoint checks `customers.read` and organization access
+before decrypting the stored values and disables response caching. Customer list,
+create, and update responses continue to provide only masked identity fields.
+Deploy the updated API and rebuild/reinstall the APK together for this change.

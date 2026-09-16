@@ -42,7 +42,10 @@ async function parseResponse(response: Response) {
   const payload = await response.json().catch(() => null);
   if (!response.ok || payload?.success === false) {
     const validationMessage = payload?.errors && Object.values(payload.errors as Record<string, string[]>).flat().find(Boolean);
-    throw new ApiError(payload?.message || validationMessage || payload?.title || `Request failed (${response.status})`, response.status, payload?.errors, payload?.traceId);
+    const fallbackMessage = response.status === 413
+      ? "This upload is too large. Choose a document smaller than 10 MB and try again."
+      : `Request failed (${response.status})`;
+    throw new ApiError(payload?.message || validationMessage || payload?.title || fallbackMessage, response.status, payload?.errors, payload?.traceId);
   }
   return payload?.data ?? payload;
 }

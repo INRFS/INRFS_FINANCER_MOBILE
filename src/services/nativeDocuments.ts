@@ -12,6 +12,22 @@ import { platformApi } from "./platformApi";
 type DocumentOwner = { customerId?: string; applicationId?: string; financerId?: string };
 export type PickedDocument = { uri: string; name: string; mimeType: string; size?: number };
 
+// The API caps the entire multipart request at 10 MiB; leave room for its form fields.
+export const MAX_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024 - 64 * 1024;
+
+export async function validateDocumentForUpload(asset: PickedDocument): Promise<void> {
+  let size = asset.size;
+  if (size === undefined) {
+    const info = await FileSystem.getInfoAsync(asset.uri);
+    if (!info.exists || info.isDirectory) throw new Error(`Cannot read ${asset.name}. Please select the document again.`);
+    size = info.size;
+  }
+  if (!Number.isFinite(size) || size <= 0) throw new Error(`${asset.name} is empty or unreadable. Please select the document again.`);
+  if (size > MAX_DOCUMENT_SIZE_BYTES) {
+    throw new Error(`${asset.name} is too large. Choose a document smaller than 10 MB.`);
+  }
+}
+
 export async function pickDocument(type = "*/*"): Promise<PickedDocument | null> {
   const result = await DocumentPicker.getDocumentAsync({ type, copyToCacheDirectory: true, multiple: false });
   if (result.canceled) return null;
@@ -20,6 +36,7 @@ export async function pickDocument(type = "*/*"): Promise<PickedDocument | null>
 }
 
 export async function uploadPickedDocument(asset: PickedDocument, category: string, owner: DocumentOwner) {
+  await validateDocumentForUpload(asset);
   const data = new FormData();
   data.append("file", { uri: asset.uri, name: asset.name, type: asset.mimeType } as unknown as Blob);
   data.append("category", category);
