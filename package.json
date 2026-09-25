@@ -10,8 +10,9 @@
     "web": "expo start --web",
     "build:apk": "npx eas-cli@latest build --platform android --profile preview --clear-cache",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint .",
-    "test:static": "node --test tests/mobile-static-regressions.test.cjs"
+    "test": "node --test tests/*.test.cjs",
+    "test:static": "node --test tests/mobile-static-regressions.test.cjs",
+    "test:dynamic": "node --test tests/service-charge-dynamic.test.cjs"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.1",

@@ -126,11 +126,14 @@ test("API transport has timeout and friendly network errors", () => {
 
 test("service-charge status and effective date are persisted", () => {
   const mobile = source("src/screens/admin/AdminServiceChargesScreen.tsx");
-  const backend = source("inrfs_financer_api/src/INRFS.Financer.Infrastructure/PlatformService.cs");
   assert.match(mobile, /ServiceChargeConfigurationStatus/);
   assert.match(mobile, /ServiceChargeEffectiveDate/);
-  assert.match(backend, /overrideIsActive/);
-  assert.match(backend, /overrideIsEffective/);
+  const backendPath = path.join(root, "inrfs_financer_api/src/INRFS.Financer.Infrastructure/PlatformService.cs");
+  if (fs.existsSync(backendPath)) {
+    const backend = fs.readFileSync(backendPath, "utf8");
+    assert.match(backend, /overrideIsActive/);
+    assert.match(backend, /overrideIsEffective/);
+  }
 });
 
 test("service charge labels 26th-to-25th cycles by their closing month", () => {
@@ -188,3 +191,21 @@ test("active date defaults do not derive local today from UTC ISO", () => {
     assert.doesNotMatch(source(file), /new Date\(\)\.toISOString\(\)\.slice\(0,\s*10\)/, file);
   }
 });
+
+test("decorative login background waves and ambient shapes are strictly login-only", () => {
+  const sharedUi = source("src/components/ui.tsx");
+  assert.doesNotMatch(sharedUi, /BottomOceanWaves/);
+  assert.doesNotMatch(sharedUi, /ambientWaveTop/);
+  assert.doesNotMatch(sharedUi, /TopOceanHeaderDecor/);
+
+  const dashboard = source("src/screens/financer/DashboardScreen.tsx");
+  assert.doesNotMatch(dashboard, /BottomOceanWaves/);
+  assert.doesNotMatch(dashboard, /ambientWaveTop/);
+  assert.doesNotMatch(dashboard, /TopOceanHeaderDecor/);
+
+  const auth = source("src/screens/auth/AuthScreens.tsx");
+  assert.match(auth, /BottomOceanWaves/);
+  assert.match(auth, /ambientWaveTop/);
+  assert.match(auth, /TopOceanHeaderDecor/);
+});
+

@@ -65,7 +65,7 @@ function DonutChart({ data }: { data: { name: string; value: number; color: stri
   );
 }
 
-import { SparklineWave, BottomOceanWaves, TopOceanHeaderDecor } from "../../components/OceanDecorations";
+import { SparklineWave } from "../../components/OceanDecorations";
 
 function BarChart({ data }: { data: { month: string; collected: number }[] }) {
   const defaultMonths = [
@@ -279,21 +279,12 @@ export function DashboardScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
-      <View pointerEvents="none" style={styles.ambient}>
-        <TopOceanHeaderDecor style={styles.topHeaderDecor} />
-        <View style={styles.ambientWaveTop} />
-        <View style={styles.ambientWaveBottom} />
-        <View style={styles.ambientWaveAccent} />
-        <BottomOceanWaves height={100} style={styles.screenBottomWave} />
-      </View>
-      
       <ScrollView 
         contentContainerStyle={styles.screen} 
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={state.loading && !!d.totalCustomers} onRefresh={state.refresh} tintColor={colors.cyan} />}
       >
-        <View style={[styles.headerCard, { overflow: "hidden" }]}>
-          <TopOceanHeaderDecor style={{ top: -20, right: -20 }} />
+        <View style={styles.headerCard}>
           <View style={styles.headerTop}>
             <View>
               <Text style={styles.welcomeText}>Welcome, {displayName}</Text>
@@ -520,36 +511,6 @@ export function DashboardScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  ambient: { ...StyleSheet.absoluteFillObject, overflow: "hidden", zIndex: -1 },
-  topHeaderDecor: { position: "absolute", top: -15, right: -10 },
-  screenBottomWave: { position: "absolute", bottom: 0, left: 0, right: 0 },
-  ambientWaveTop: {
-    position: "absolute",
-    width: 320,
-    height: 320,
-    borderRadius: 160,
-    backgroundColor: "rgba(0, 156, 212, 0.08)",
-    top: -120,
-    right: -80,
-  },
-  ambientWaveBottom: {
-    position: "absolute",
-    width: 360,
-    height: 360,
-    borderRadius: 180,
-    backgroundColor: "rgba(38, 198, 218, 0.09)",
-    bottom: -140,
-    left: -100,
-  },
-  ambientWaveAccent: {
-    position: "absolute",
-    width: 240,
-    height: 240,
-    borderRadius: 120,
-    backgroundColor: "rgba(224, 247, 250, 0.6)",
-    top: "35%",
-    right: -100,
-  },
   screen: { padding: spacing.lg, paddingTop: spacing.md, paddingBottom: 110, gap: spacing.lg },
   
   headerCard: {

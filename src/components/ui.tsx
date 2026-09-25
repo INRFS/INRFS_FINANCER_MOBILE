@@ -20,8 +20,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, fonts, radii, shadows, spacing } from "../theme/tokens";
 import type { Accent, Status } from "../types/navigation";
 
-import { BottomOceanWaves, TopOceanHeaderDecor } from "./OceanDecorations";
-
 export const accentColors: Record<Accent, string> = {
   cyan: colors.cyan,
   green: colors.green,
@@ -45,13 +43,6 @@ export const accentSoft: Record<Accent, string> = {
 export function Screen({ children, contentStyle, scroll = true }: { children: ReactNode; contentStyle?: StyleProp<ViewStyle>; scroll?: boolean }) {
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
-      <View pointerEvents="none" style={styles.ambient}>
-        <TopOceanHeaderDecor style={styles.topHeaderDecor} />
-        <View style={styles.ambientWaveTop} />
-        <View style={styles.ambientWaveBottom} />
-        <View style={styles.ambientWaveAccent} />
-        <BottomOceanWaves height={100} style={styles.screenBottomWave} />
-      </View>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1, zIndex: 1 }}>
         {scroll ? (
           <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.screen, contentStyle]} showsVerticalScrollIndicator={false}>
@@ -261,45 +252,6 @@ export function DataRow({ title, subtitle, amount, status, onPress }: { title: s
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  ambient: { ...StyleSheet.absoluteFillObject, overflow: "hidden" },
-  topHeaderDecor: {
-    position: "absolute",
-    top: -15,
-    right: -10,
-  },
-  screenBottomWave: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-  },
-  ambientWaveTop: {
-    position: "absolute",
-    width: 320,
-    height: 320,
-    borderRadius: 160,
-    backgroundColor: "rgba(0, 156, 212, 0.08)",
-    top: -120,
-    right: -80,
-  },
-  ambientWaveBottom: {
-    position: "absolute",
-    width: 360,
-    height: 360,
-    borderRadius: 180,
-    backgroundColor: "rgba(38, 198, 218, 0.09)",
-    bottom: -140,
-    left: -100,
-  },
-  ambientWaveAccent: {
-    position: "absolute",
-    width: 240,
-    height: 240,
-    borderRadius: 120,
-    backgroundColor: "rgba(224, 247, 250, 0.6)",
-    top: "35%",
-    right: -100,
-  },
   screen: { padding: spacing.lg, paddingTop: spacing.xl, paddingBottom: 110, gap: spacing.xl },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, minHeight: 54 },
   headerAccent: { width: 4, height: 36, borderRadius: radii.pill, backgroundColor: colors.cyan },
