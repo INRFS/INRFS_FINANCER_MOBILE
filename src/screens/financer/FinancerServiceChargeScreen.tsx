@@ -9,8 +9,7 @@ import { s } from "./styles";
 import { Ionicons } from "../../components/AppIcon";
 import { colors, fonts, radii, spacing } from "../../theme/tokens";
 import { formatInr } from "../../utils/format";
-import { groupServiceCharges, withLiveInterestCollected } from "../../utils/serviceCharge";
-import { localDateOnly } from "../../utils/date";
+import { calculateMonthlyServiceCharges } from "../../utils/serviceCharge";
 
 const formatCurrency = formatInr;
 
@@ -24,13 +23,40 @@ export function FinancerServiceChargeScreen() {
     setLoading(true);
     setPageError('');
     try {
-      const [invoicePayload, paymentPayload] = await Promise.all([
-        platformApi.admin.allInvoices(),
-        platformApi.payments.all(),
+      const [invoicePayload, paymentPayload, loanPayload, profilePayload, settingsPayload] = await Promise.all([
+        platformApi.admin.allInvoices().catch(() => ({ items: [] })),
+        platformApi.payments.all().catch(() => ({ items: [] })),
+        platformApi.loans.all().catch(() => ({ items: [] })),
+        platformApi.profile.get().catch(() => null),
+        platformApi.settings.list("Platform").catch(() => []),
       ]);
-      const grouped = groupServiceCharges(pageItems(invoicePayload), localDateOnly());
+      const invoices = pageItems(invoicePayload);
       const payments = pageItems(paymentPayload);
-      setBilling(grouped.map((item, index) => index === 0 ? withLiveInterestCollected(item, payments) : item));
+      const loans = pageItems(loanPayload);
+      const settingsList = Array.isArray(settingsPayload)
+        ? settingsPayload
+        : pageItems(settingsPayload);
+      const platformSetting = settingsList.find(
+        (item: any) => item.key === "ServiceChargePercentage"
+      );
+      const defaultRate =
+        Number(
+          (profilePayload as any)?.financer?.serviceChargePercentage ??
+            (profilePayload as any)?.serviceChargePercentage ??
+            platformSetting?.value ??
+            1
+        ) || 1;
+
+      const dynamicBilling = calculateMonthlyServiceCharges({
+        invoices,
+        loans,
+        payments,
+        defaultRate,
+        referenceDate: new Date(),
+        ensureCurrentMonth: true,
+      });
+
+      setBilling(dynamicBilling);
     } catch (e) {
       setPageError(e instanceof Error ? e.message : "Failed to load service charges.");
     } finally {
